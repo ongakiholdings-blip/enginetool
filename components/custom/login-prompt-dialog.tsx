@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Localize } from '@deriv-com/translations';
 import { prefetchAuthReferral } from '@/hooks/use-auth';
 import { useIsMobile } from '@/hooks/use-is-mobile';
 import { Button } from '@/components/ui/button';
+import { ApiTokenLoginDialog } from '@/components/custom/api-token-login-dialog';
 import {
   Dialog,
   DialogContent,
@@ -25,14 +26,21 @@ interface LoginPromptDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLogin: () => Promise<void>;
+  onApiTokenLogin?: (token: string) => Promise<void>;
   onSignUp: () => Promise<void>;
 }
 
 function LoginPromptActions({
   onClose,
   onLogin,
+  onApiTokenLogin,
   onSignUp,
-}: Pick<LoginPromptDialogProps, 'onLogin' | 'onSignUp'> & { onClose: () => void }) {
+  onRequestApiToken,
+}: Pick<LoginPromptDialogProps, 'onLogin' | 'onSignUp'> & {
+  onClose: () => void;
+  onApiTokenLogin?: (token: string) => Promise<void>;
+  onRequestApiToken: () => void;
+}) {
   // One handoff per mount: Radix/vaul keep the closing CTAs clickable through
   // animate-out, and a second activation would rebuild the PKCE verifier/state
   // the first OAuth URL was minted with. The ref resets when the prompt
@@ -54,6 +62,18 @@ function LoginPromptActions({
       <Button variant="outline" className="w-full" onClick={() => start(onLogin)}>
         <Localize i18n_default_text="Log in" />
       </Button>
+      {onApiTokenLogin && (
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            onClose();
+            onRequestApiToken();
+          }}
+        >
+          <Localize i18n_default_text="Log in with API token" />
+        </Button>
+      )}
     </>
   );
 }
@@ -68,9 +88,11 @@ export function LoginPromptDialog({
   open,
   onOpenChange,
   onLogin,
+  onApiTokenLogin,
   onSignUp,
 }: LoginPromptDialogProps) {
   const isMobile = useIsMobile();
+  const [apiTokenDialogOpen, setApiTokenDialogOpen] = useState(false);
   const close = () => onOpenChange(false);
 
   // Resolve affiliate attribution while the user reads the prompt: the Scaleo
@@ -83,41 +105,71 @@ export function LoginPromptDialog({
 
   if (isMobile) {
     return (
-      // No background scaling: the sheet overlays a live chart canvas, which
-      // should not shrink behind the overlay.
-      <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
-        <DrawerContent>
-          <DrawerHeader className="text-left">
-            <DrawerTitle>
-              <Localize i18n_default_text="Start trading with us" />
-            </DrawerTitle>
-            <DrawerDescription>
-              <Localize i18n_default_text="Log in or create a free account to place a trade." />
-            </DrawerDescription>
-          </DrawerHeader>
-          <DrawerFooter>
-            <LoginPromptActions onClose={close} onLogin={onLogin} onSignUp={onSignUp} />
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
+      <>
+        {/* No background scaling: the sheet overlays a live chart canvas, which
+            should not shrink behind the overlay. */}
+        <Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground={false}>
+          <DrawerContent>
+            <DrawerHeader className="text-left">
+              <DrawerTitle>
+                <Localize i18n_default_text="Start trading with us" />
+              </DrawerTitle>
+              <DrawerDescription>
+                <Localize i18n_default_text="Log in or create a free account to place a trade." />
+              </DrawerDescription>
+            </DrawerHeader>
+            <DrawerFooter>
+              <LoginPromptActions
+                onClose={close}
+                onLogin={onLogin}
+                onApiTokenLogin={onApiTokenLogin}
+                onRequestApiToken={() => setApiTokenDialogOpen(true)}
+                onSignUp={onSignUp}
+              />
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+        {onApiTokenLogin && (
+          <ApiTokenLoginDialog
+            open={apiTokenDialogOpen}
+            onOpenChange={setApiTokenDialogOpen}
+            onLogin={onApiTokenLogin}
+          />
+        )}
+      </>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>
-            <Localize i18n_default_text="Start trading with us" />
-          </DialogTitle>
-          <DialogDescription>
-            <Localize i18n_default_text="Log in or create a free account to place a trade." />
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <LoginPromptActions onClose={close} onLogin={onLogin} onSignUp={onSignUp} />
-        </div>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              <Localize i18n_default_text="Start trading with us" />
+            </DialogTitle>
+            <DialogDescription>
+              <Localize i18n_default_text="Log in or create a free account to place a trade." />
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <LoginPromptActions
+              onClose={close}
+              onLogin={onLogin}
+              onApiTokenLogin={onApiTokenLogin}
+              onRequestApiToken={() => setApiTokenDialogOpen(true)}
+              onSignUp={onSignUp}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+      {onApiTokenLogin && (
+        <ApiTokenLoginDialog
+          open={apiTokenDialogOpen}
+          onOpenChange={setApiTokenDialogOpen}
+          onLogin={onApiTokenLogin}
+        />
+      )}
+    </>
   );
 }

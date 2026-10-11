@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { FocusScope } from '@radix-ui/react-focus-scope';
-import { LogOut, Menu, X } from 'lucide-react';
+import { KeyRound, LogOut, Menu, X } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Localize } from '@deriv-com/translations';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { LANGUAGE_LOCALES } from '@/lib/i18n';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { LanguageSwitcher } from '@/components/custom/language-switcher';
+import { ApiTokenLoginDialog } from '@/components/custom/api-token-login-dialog';
 import type { AuthState, DerivAccount } from '@deriv/core';
 
 interface HeaderProps {
@@ -19,6 +20,7 @@ interface HeaderProps {
   accounts: DerivAccount[];
   activeAccount: DerivAccount | null;
   onLogin: () => Promise<void>;
+  onApiTokenLogin?: (token: string) => Promise<void>;
   onLogout: () => void;
   onSwitchAccount: (accountId: string) => Promise<void>;
   /** When provided, a Sign up button is rendered to the right of the Log in button. */
@@ -28,7 +30,7 @@ interface HeaderProps {
   logoSrc?: string;
   /** App name used for the header text and the fallback logo letter when no logoSrc
    *  is provided. Prefers the live preview / Customise name, then
-   *  NEXT_PUBLIC_DERIV_APP_NAME, then 'Deriv Trading'. */
+   *  NEXT_PUBLIC_DERIV_APP_NAME, then 'FROSTY-DBOT'. */
   appName?: string;
   /**
    * When false, hide the name text next to the logo. Defaults to the
@@ -65,7 +67,7 @@ function AccountLabel({ type }: { type: 'demo' | 'real' }) {
 
 function resolveHeaderAppName(appName?: string): string {
   const fromEnv = process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim();
-  return appName?.trim() || fromEnv || 'Deriv Trading';
+  return appName?.trim() || fromEnv || 'FROSTY-DBOT';
 }
 
 function resolveShowAppName(showAppName?: boolean): boolean {
@@ -201,58 +203,12 @@ function AppearancePicker() {
   );
 }
 
-function MobileAuthButtons({
-  isAuthenticated,
-  isAuthenticating,
-  onLogin,
-  onLogout,
-  onSignUp,
-}: {
-  isAuthenticated: boolean;
-  isAuthenticating: boolean;
-  onLogin: () => Promise<void>;
-  onLogout: () => void;
-  onSignUp?: () => Promise<void>;
-}) {
-  const className = 'w-full h-11 font-semibold';
-
-  if (isAuthenticated) {
-    return (
-      <Button variant="outline" className={className} onClick={onLogout}>
-        <LogOut className="h-4 w-4 mr-2" />
-        <Localize i18n_default_text="Log out" />
-      </Button>
-    );
-  }
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        className={cn(className, 'bg-transparent hover:bg-transparent')}
-        onClick={onLogin}
-        disabled={isAuthenticating}
-      >
-        {isAuthenticating ? (
-          <Localize i18n_default_text="Logging in..." />
-        ) : (
-          <Localize i18n_default_text="Log in" />
-        )}
-      </Button>
-      {onSignUp && (
-        <Button className={className} onClick={onSignUp} disabled={isAuthenticating}>
-          <Localize i18n_default_text="Sign up" />
-        </Button>
-      )}
-    </>
-  );
-}
-
 export function Header({
   authState,
   accounts,
   activeAccount,
   onLogin,
+  onApiTokenLogin,
   onLogout,
   onSwitchAccount,
   onSignUp,
@@ -268,6 +224,7 @@ export function Header({
   const shouldShowName = resolveShowAppName(showAppName);
   const logoLetter = resolvedName.charAt(0).toUpperCase() || 'D';
   const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false);
+  const [apiTokenDialogOpen, setApiTokenDialogOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
   const [menuTop, setMenuTop] = useState(0);
@@ -294,8 +251,18 @@ export function Header({
   }, [mobileMenuOpen]);
 
   const headerBar = (
-      <header ref={headerRef} className="sticky top-0 z-50 flex items-center justify-between px-4 py-3 border-b bg-background/80 backdrop-blur-sm">
+      <header ref={headerRef} className="sticky top-0 z-50 flex items-center justify-between border-b border-border/70 bg-background/80 px-4 py-3 shadow-[0_8px_30px_-24px_rgb(0_0_0/0.6)] backdrop-blur-xl">
       <div className="flex items-center gap-3 shrink-0">
+        <DialogPrimitive.Trigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden shrink-0"
+            aria-label={localize('Your preferences')}
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </DialogPrimitive.Trigger>
         {!logoSrc || logoError ? (
           <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
             {logoLetter}
@@ -310,7 +277,7 @@ export function Header({
           />
         )}
         {shouldShowName && (
-          <h1 className="text-lg font-semibold text-foreground hidden sm:block">
+          <h1 className="hidden text-lg font-bold tracking-wide text-foreground sm:block">
             {resolvedName}
           </h1>
         )}
@@ -379,16 +346,64 @@ export function Header({
             onSignUp={onSignUp}
           />
         </div>
-        <DialogPrimitive.Trigger asChild>
+        {!isAuthenticated && (
+          <div className="flex items-center gap-2 lg:hidden">
+            {onApiTokenLogin && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                aria-label={localize('Log in with API token')}
+                title={localize('Log in with API token')}
+                onClick={() => setApiTokenDialogOpen(true)}
+              >
+                <KeyRound className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-3"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                void onLogin();
+              }}
+              disabled={isAuthenticating}
+            >
+              {isAuthenticating ? (
+                <Localize i18n_default_text="Logging in..." />
+              ) : (
+                <Localize i18n_default_text="Log in" />
+              )}
+            </Button>
+            {onSignUp && (
+              <Button
+                size="sm"
+                className="h-9 px-3"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  void onSignUp();
+                }}
+                disabled={isAuthenticating}
+              >
+                <Localize i18n_default_text="Sign up" />
+              </Button>
+            )}
+          </div>
+        )}
+        {!isAuthenticated && onApiTokenLogin && (
           <Button
-            variant="ghost"
-            size="icon"
-            className="lg:hidden shrink-0"
-            aria-label={localize('Your preferences')}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="hidden lg:inline-flex"
+            onClick={() => setApiTokenDialogOpen(true)}
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <KeyRound className="mr-1.5 h-4 w-4" />
+            <Localize i18n_default_text="API token" />
           </Button>
-        </DialogPrimitive.Trigger>
+        )}
       </div>
       </header>
   );
@@ -397,20 +412,26 @@ export function Header({
     <DialogPrimitive.Root modal={false} open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
       {/* modal=false keeps the header X and portaled popovers interactive */}
       {headerBar}
+      {onApiTokenLogin && (
+        <ApiTokenLoginDialog
+          open={apiTokenDialogOpen}
+          onOpenChange={setApiTokenDialogOpen}
+          onLogin={onApiTokenLogin}
+        />
+      )}
       {/* Portal to body: Content is position:fixed z-[100], but a class z-index is
           trapped in the edit-mode `sticky z-50` wrapper, so chart FixedZones at
           z-[60] still steal Appearance/Language clicks ("Gráfico · no editable"). */}
       <DialogPrimitive.Portal>
       <FocusScope loop trapped={mobileMenuOpen}>
       <DialogPrimitive.Content
-        aria-modal="true"
-        className="fixed inset-x-0 bottom-0 z-[100] flex flex-col bg-background lg:hidden outline-none"
+        className="fixed bottom-0 left-0 z-[100] flex w-1/2 flex-col bg-background outline-none lg:hidden"
         style={{ top: menuTop }}
         onPointerDownOutside={preventDismissFromPopoverOrHeader}
         onInteractOutside={preventDismissFromPopoverOrHeader}
         onFocusOutside={preventDismissFromPopoverOrHeader}
       >
-        <div className="flex-1 overflow-y-auto px-6 pt-4 space-y-6">
+        <div className="flex-1 space-y-6 overflow-y-auto px-4 pt-4">
           <div className="space-y-2 text-left">
             <DialogPrimitive.Title className="text-lg font-semibold leading-none tracking-tight">
               <Localize i18n_default_text="Your preferences" />
@@ -427,18 +448,21 @@ export function Header({
             <LanguageSwitcher className="w-full h-11 font-semibold" />
           </div>
         </div>
-        <div className="mt-auto px-6 pb-8 pt-4 flex flex-col gap-3 border-t border-border">
-          <MobileAuthButtons
-            isAuthenticated={isAuthenticated}
-            isAuthenticating={isAuthenticating}
-            onLogin={onLogin}
-            onLogout={() => {
-              setMobileMenuOpen(false);
-              onLogout();
-            }}
-            onSignUp={onSignUp}
-          />
-        </div>
+        {isAuthenticated && (
+          <div className="mt-auto border-t border-border px-4 pb-8 pt-4">
+            <Button
+              variant="outline"
+              className="h-11 w-full font-semibold"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <Localize i18n_default_text="Log out" />
+            </Button>
+          </div>
+        )}
       </DialogPrimitive.Content>
       </FocusScope>
       </DialogPrimitive.Portal>

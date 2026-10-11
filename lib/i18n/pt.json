@@ -90,5 +90,10 @@
   "-839094775": "Voltar",
   "-885388417": "Último dígito:",
   "-905535397": "Digit Differs",
-  "-912577498": "Matches"
+  "-912577498": "Matches",
+  "-647983549": "Introduza um token de API Deriv com permissão para negociar. O token é mantido apenas durante esta sessão do navegador.",
+  "-993974976": "Ligar com token",
+  "-2101059099": "A ligar...",
+  "904696726": "Token de API",
+  "2046016128": "Iniciar sessão com token de API"
 }

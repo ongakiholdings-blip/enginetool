@@ -18,6 +18,7 @@ import { TradeControls } from './trade-controls';
 import { ConfigurableDigitsControls, ConfigurableBuyButton } from './configurable-digits-controls';
 import { TradeTypeChips } from '@/components/custom/trade-type-chips';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
+import { TransactionsPanel } from '@/components/custom/transactions-panel';
 import { ThemeToggle } from '@/components/custom/theme-toggle';
 import type {
   AuthState,
@@ -28,7 +29,13 @@ import type {
   DurationLimits,
   BuyResult,
 } from '@deriv/core';
-import type { ContractMode, TradeType, DigitStats } from '../lib/types';
+import type {
+  ContractMode,
+  TradeType,
+  DigitStats,
+  OpenPosition,
+  ClosedPosition,
+} from '../lib/types';
 import { ALL_CONTROL_KEYS } from '../lib/app-config';
 import type { ControlKey, DigitsAppConfig } from '../lib/app-config';
 
@@ -52,7 +59,6 @@ function getDigitTradeTypeOptions(
   return [
     { value: 'matches-differs', label: localize('Matches/Differs') },
     { value: 'over-under', label: localize('Over/Under') },
-    { value: 'even-odd', label: localize('Even/Odd') },
   ];
 }
 
@@ -66,6 +72,7 @@ export interface DigitsViewProps {
   accounts: DerivAccount[];
   activeAccount: DerivAccount | null;
   onLogin: () => Promise<void>;
+  onApiTokenLogin?: (token: string) => Promise<void>;
   onSignUp: () => Promise<void>;
   onLogout: () => void;
   onSwitchAccount: (accountId: string) => Promise<void>;
@@ -103,6 +110,13 @@ export interface DigitsViewProps {
   buyResult: BuyResult | null;
   buyError: string | null;
   clearBuyResult: () => void;
+  openPositions: OpenPosition[];
+  closedPositions: ClosedPosition[];
+  refreshClosedPositions: () => Promise<void>;
+  sellContract: (contractId: number, bidPrice: string) => Promise<void>;
+  sellingId: number | null;
+  sellError: string | null;
+  clearSellError: () => void;
   // Branding (used by preview route; no-op in the real app)
   logoSrc?: string;
   appName?: string;
@@ -131,6 +145,7 @@ export function DigitsView({
   accounts,
   activeAccount,
   onLogin,
+  onApiTokenLogin,
   onSignUp,
   onLogout,
   onSwitchAccount,
@@ -162,6 +177,13 @@ export function DigitsView({
   buyResult,
   buyError,
   clearBuyResult,
+  openPositions,
+  closedPositions,
+  refreshClosedPositions,
+  sellContract,
+  sellingId,
+  sellError,
+  clearSellError,
   logoSrc,
   appName,
   showAppName,
@@ -196,6 +218,8 @@ export function DigitsView({
   const { localize } = useAppTranslations();
   const digitTradeTypeOptions = getDigitTradeTypeOptions(localize);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(false);
+  const handleViewPositions = useCallback(() => setShowTransactions(true), []);
 
   // Logged-out Buy opens the login/sign-up prompt instead of sending a buy that
   // would fail with a "Purchase Failed" toast. One gate covers every Buy
@@ -250,6 +274,7 @@ export function DigitsView({
         accounts={accounts}
         activeAccount={activeAccount}
         onLogin={editMode ? noopAsync : onLogin}
+        onApiTokenLogin={editMode ? undefined : onApiTokenLogin}
         onSignUp={editMode ? noopAsync : onSignUp}
         onLogout={editMode ? noop : onLogout}
         onSwitchAccount={editMode ? noopAsync : onSwitchAccount}
@@ -265,6 +290,7 @@ export function DigitsView({
     activeAccount,
     editMode,
     onLogin,
+    onApiTokenLogin,
     onSignUp,
     onLogout,
     onSwitchAccount,
@@ -319,6 +345,7 @@ export function DigitsView({
         proposal={proposal}
         isProposalLoading={isProposalLoading}
         onBuy={handleBuy}
+        onViewPositions={handleViewPositions}
         isBuying={isBuying}
         isConnected={isConnected}
         isAuthenticated={authState === 'authenticated'}
@@ -334,7 +361,7 @@ export function DigitsView({
   return (
     <main
       className={`flex flex-col max-lg:h-dvh max-lg:overflow-y-auto lg:overflow-visible ${
-        editMode ? 'bg-muted/50' : 'bg-background'
+        editMode ? 'bg-muted/50' : 'bg-transparent'
       }`}
     >
       {editMode ? (
@@ -428,7 +455,7 @@ export function DigitsView({
                 onValueChange={setTradeType}
               />
 
-              <Card className="shrink-0 border shadow-sm mb-12">
+              <Card className="mb-12 shrink-0 ring-1 ring-primary/10">
                 <CardContent className="flex flex-col p-3 pt-3 sm:p-6 sm:pt-4 pb-2 sm:pb-6">
                   {/* Symbol selector + tick display */}
                   <div className="flex flex-col pb-4 pt-1 sm:pb-6 sm:pt-2">
@@ -448,16 +475,13 @@ export function DigitsView({
                   </div>
 
                   <div className="border-t divide-y divide-border">
-                    {/* Digit stats — hidden for Even/Odd */}
-                    {tradeType !== 'even-odd' && (
-                      <div className="py-4 sm:py-6">
-                        <DigitStatsBar
-                          digitStats={digitStats}
-                          selectedDigit={selectedDigit}
-                          onDigitSelect={setSelectedDigit}
-                        />
-                      </div>
-                    )}
+                    <div className="py-4 sm:py-6">
+                      <DigitStatsBar
+                        digitStats={digitStats}
+                        selectedDigit={selectedDigit}
+                        onDigitSelect={setSelectedDigit}
+                      />
+                    </div>
 
                     {/* Trade controls */}
                     <div className="pt-4 sm:pt-6">
@@ -475,6 +499,7 @@ export function DigitsView({
                         proposal={proposal}
                         isProposalLoading={isProposalLoading}
                         onBuy={handleBuy}
+                        onViewPositions={handleViewPositions}
                         isBuying={isBuying}
                         buyResult={buyResult}
                         buyError={buyError}
@@ -518,14 +543,11 @@ export function DigitsView({
                       pipSize={pipSize}
                     />
                   </div>
-                  {/* Digit stats — hidden for Even/Odd */}
-                  {tradeType !== 'even-odd' && (
-                    <DigitStatsBar
-                      digitStats={digitStats}
-                      selectedDigit={selectedDigit}
-                      onDigitSelect={setSelectedDigit}
-                    />
-                  )}
+                  <DigitStatsBar
+                    digitStats={digitStats}
+                    selectedDigit={selectedDigit}
+                    onDigitSelect={setSelectedDigit}
+                  />
                 </CardContent>
               </Card>
               <Card data-testid="controls-column">
@@ -552,6 +574,7 @@ export function DigitsView({
                     proposal={proposal}
                     isProposalLoading={isProposalLoading}
                     onBuy={handleBuy}
+                    onViewPositions={handleViewPositions}
                     isBuying={isBuying}
                     buyResult={buyResult}
                     buyError={buyError}
@@ -599,7 +622,25 @@ export function DigitsView({
         open={showLoginPrompt}
         onOpenChange={setShowLoginPrompt}
         onLogin={editMode ? noopAsyncAuth : onLogin}
+        onApiTokenLogin={editMode ? undefined : onApiTokenLogin}
         onSignUp={editMode ? noopAsyncAuth : onSignUp}
+      />
+      <TransactionsPanel
+        open={showTransactions && authState === 'authenticated'}
+        onOpenChange={setShowTransactions}
+        openPositions={openPositions}
+        closedPositions={closedPositions}
+        onRefreshTransactions={refreshClosedPositions}
+        onSell={sellContract}
+        sellingId={sellingId}
+        sellError={sellError}
+        onClearSellError={clearSellError}
+        contractTypeLabels={{
+          DIGITMATCH: localize('Digit Match'),
+          DIGITDIFF: localize('Digit Differs'),
+          DIGITOVER: localize('Digit Over'),
+          DIGITUNDER: localize('Digit Under'),
+        }}
       />
     </main>
   );

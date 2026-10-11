@@ -90,5 +90,10 @@
   "-839094775": "Back",
   "-885388417": "Last Digit:",
   "-905535397": "Digit Differs",
-  "-912577498": "Matches"
+  "-912577498": "Matches",
+  "-647983549": "Enter a Deriv API token with trade permission. Your token is kept only for this browser session.",
+  "-993974976": "Connect with token",
+  "-2101059099": "Connecting...",
+  "904696726": "API token",
+  "2046016128": "Log in with API token"
 }

@@ -79,7 +79,7 @@ export function TradeTypeChips<T extends string>({
             <ToggleGroupItem
               key={opt.value}
               value={opt.value}
-              className="h-8 whitespace-nowrap rounded-full border border-input bg-background px-3 text-xs font-medium data-[state=on]:border-foreground data-[state=on]:bg-foreground data-[state=on]:text-background hover:bg-muted sm:h-10 sm:px-4 sm:text-sm"
+              className="h-9 whitespace-nowrap rounded-xl border border-border bg-card/70 px-4 text-xs font-semibold shadow-sm transition-all data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:shadow-[0_0_24px_rgb(var(--primary)/0.22)] hover:bg-accent sm:h-10 sm:px-5 sm:text-sm"
             >
               {opt.label}
             </ToggleGroupItem>

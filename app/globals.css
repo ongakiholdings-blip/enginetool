@@ -4,28 +4,28 @@
 
 @layer base {
   :root {
-    --radius: 0.5rem;
+    --radius: 0.875rem;
     
     /* Light mode colors from Figma tokens */
-    --primary: 6 155 210;
-    --accent: 246 247 248;
-    --background: 255 255 255;
-    --border: 229 229 229;
+    --primary: 0 176 255;
+    --accent: 231 245 255;
+    --background: 246 249 252;
+    --border: 218 230 241;
     --card: 255 255 255;
-    --card-foreground: 10 10 10;
+    --card-foreground: 12 22 37;
     --destructive: 230 25 14 / 0.7200000286102295;
     --destructive-foreground: 254 252 252;
     --accent-foreground: 17 20 27;
-    --foreground: 10 10 10;
-    --input: 0 0 0 / 0.07999999821186066;
-    --muted: 245 245 245;
+    --foreground: 12 22 37;
+    --input: 210 225 239;
+    --muted: 235 242 248;
     --popover: 255 255 255;
-    --popover-foreground: 10 10 10;
-    --primary-foreground: 255 255 255;
-    --ring: 163 163 163;
-    --secondary: 255 255 255;
-    --secondary-foreground: 0 0 0;
-    --muted-foreground: 115 115 115;
+    --popover-foreground: 12 22 37;
+    --primary-foreground: 4 18 33;
+    --ring: 0 176 255;
+    --secondary: 235 243 250;
+    --secondary-foreground: 12 22 37;
+    --muted-foreground: 91 111 132;
     --chart-1: 234 88 12;
     --chart-2: 13 148 136;
     --chart-3: 22 78 99;
@@ -68,26 +68,25 @@
   }
 
   .dark {
-    /* Dark mode colors from Figma tokens */
-    --primary: 6 155 210;
-    --accent-foreground: 246 247 248;
-    --background: 24 28 37;
-    --border: 255 255 255 / 0.10000000149011612;
-    --card: 23 23 23;
-    --accent: 17 20 27;
-    --card-foreground: 255 255 255;
+    --primary: 0 194 255;
+    --accent-foreground: 224 244 255;
+    --background: 5 12 24;
+    --border: 60 81 105 / 0.55;
+    --card: 12 23 39;
+    --accent: 18 39 61;
+    --card-foreground: 232 244 255;
     --destructive: 230 25 14 / 0.7200000286102295;
     --destructive-foreground: 254 252 252;
-    --foreground: 255 255 255;
-    --input: 255 255 255 / 0.07999999821186066;
-    --muted: 38 38 38;
-    --popover: 38 38 38;
-    --popover-foreground: 255 255 255;
-    --primary-foreground: 255 255 255;
-    --ring: 115 115 115;
-    --secondary: 0 0 0;
-    --secondary-foreground: 255 255 255;
-    --muted-foreground: 163 163 163;
+    --foreground: 232 244 255;
+    --input: 72 96 120 / 0.55;
+    --muted: 17 32 51;
+    --popover: 12 23 39;
+    --popover-foreground: 232 244 255;
+    --primary-foreground: 3 15 27;
+    --ring: 0 194 255;
+    --secondary: 17 32 51;
+    --secondary-foreground: 232 244 255;
+    --muted-foreground: 151 174 197;
     --chart-1: 29 78 216;
     --chart-2: 0 195 144;
     --chart-3: 245 158 11;
@@ -132,5 +131,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(ellipse at 12% 0%, rgb(var(--primary) / 0.09), transparent 34rem),
+      radial-gradient(ellipse at 100% 55%, rgb(22 255 184 / 0.035), transparent 30rem);
+    background-attachment: fixed;
   }
 }

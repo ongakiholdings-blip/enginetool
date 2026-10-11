@@ -18,7 +18,7 @@ import type { UseBaseTradingParams } from '@/hooks/use-base-trading';
 import { computeDigitStats, getLastDigit } from '../lib/digit-stats';
 import type { ContractMode, TradeType, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
 
-const CONTRACT_TYPES = ['DIGITMATCH', 'DIGITDIFF', 'DIGITOVER', 'DIGITUNDER', 'DIGITEVEN', 'DIGITODD'];
+const CONTRACT_TYPES = ['DIGITMATCH', 'DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
 
 interface UseDigitsTradingReturn {
   isConnected: boolean;
@@ -53,6 +53,7 @@ interface UseDigitsTradingReturn {
   clearBuyResult: () => void;
   openPositions: OpenPosition[];
   closedPositions: ClosedPosition[];
+  refreshClosedPositions: () => Promise<void>;
   sellContract: (contractId: number, bidPrice: string) => Promise<void>;
   sellingId: number | null;
   sellError: string | null;
@@ -78,6 +79,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     defaultStake,
     openPositions,
     closedPositions,
+    refreshClosedPositions,
     sellContract,
     sellingId,
     sellError,
@@ -100,9 +102,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
         break;
       case 'over-under':
         setContractMode('DIGITOVER');
-        break;
-      case 'even-odd':
-        setContractMode('DIGITEVEN');
         break;
     }
   }, []);
@@ -138,8 +137,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     const stakeNum = parseFloat(stake);
     if (!stakeNum || stakeNum <= 0) return null;
 
-    const needsBarrier = contractMode !== 'DIGITEVEN' && contractMode !== 'DIGITODD';
-
     return {
       contractType: contractMode,
       symbol: activeSymbol.underlying_symbol,
@@ -148,7 +145,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
       durationUnit: 't',
       basis: 'stake' as const,
       currency: 'USD',
-      ...(needsBarrier ? { barrier: selectedDigit } : {}),
+      barrier: selectedDigit,
     };
   }, [activeSymbol, contractMode, stake, duration, selectedDigit, isBuying]);
 
@@ -193,6 +190,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     clearBuyResult,
     openPositions,
     closedPositions,
+    refreshClosedPositions,
     sellContract,
     sellingId,
     sellError,

@@ -23,11 +23,9 @@ export type ContractMode =
   | 'DIGITMATCH'
   | 'DIGITDIFF'
   | 'DIGITOVER'
-  | 'DIGITUNDER'
-  | 'DIGITEVEN'
-  | 'DIGITODD';
+  | 'DIGITUNDER';
 
-export type TradeType = 'matches-differs' | 'over-under' | 'even-odd';
+export type TradeType = 'matches-differs' | 'over-under';
 
 export interface DigitStats {
   /** Count of each digit 0-9 from tick history */
@@ -37,4 +35,3 @@ export interface DigitStats {
   /** Total number of ticks analyzed */
   totalTicks: number;
 }
-

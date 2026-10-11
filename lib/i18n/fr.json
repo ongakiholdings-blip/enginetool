@@ -90,5 +90,10 @@
   "-839094775": "Retour",
   "-885388417": "Dernier chiffre :",
   "-905535397": "Digit Differs",
-  "-912577498": "Matches"
+  "-912577498": "Matches",
+  "-647983549": "Saisissez un jeton API Deriv autorisé à trader. Votre jeton est conservé uniquement pendant cette session du navigateur.",
+  "-993974976": "Se connecter avec le jeton",
+  "-2101059099": "Connexion...",
+  "904696726": "Jeton API",
+  "2046016128": "Se connecter avec un jeton API"
 }

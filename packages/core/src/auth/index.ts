@@ -17,6 +17,8 @@ export {
   getWebSocketOTP,
   logout,
 } from './accounts';
+export { authorizeApiToken } from './api-token';
+export type { ApiTokenSession } from './api-token';
 
 export { parseReferralLink, parseLandingParams, resolveReferralViaProxy } from './referral';
 
@@ -36,6 +38,9 @@ export {
   storeAuthInfo,
   getAuthInfo,
   clearAuthInfo,
+  storeDerivApiToken,
+  getDerivApiToken,
+  clearDerivApiToken,
   storeDerivAccounts,
   getDerivAccounts,
   clearDerivAccounts,

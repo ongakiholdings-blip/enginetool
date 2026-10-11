@@ -11,7 +11,7 @@ import { normalizeAppConfig, type DigitsAppConfig } from '../lib/app-config';
  * way the app is fully functional (real trading + login).
  */
 export default function DigitsPage() {
-  const [config, setConfig] = useState<DigitsAppConfig | null | undefined>(undefined);
+  const [config, setConfig] = useState<DigitsAppConfig | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,6 +29,5 @@ export default function DigitsPage() {
     };
   }, []);
 
-  if (config === undefined) return <div className="min-h-dvh bg-background" />;
   return <LiveDigits appConfig={config ?? undefined} />;
 }

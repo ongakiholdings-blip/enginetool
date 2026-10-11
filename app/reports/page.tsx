@@ -18,8 +18,6 @@ const DIGIT_CONTRACT_TYPES = [
   'DIGITDIFF',
   'DIGITOVER',
   'DIGITUNDER',
-  'DIGITEVEN',
-  'DIGITODD',
 ] as const;
 
 function getDigitContractLabels(
@@ -30,8 +28,6 @@ function getDigitContractLabels(
     DIGITDIFF: localize('Digit Differs'),
     DIGITOVER: localize('Digit Over'),
     DIGITUNDER: localize('Digit Under'),
-    DIGITEVEN: localize('Digit Even'),
-    DIGITODD: localize('Digit Odd'),
   };
 }
 
@@ -40,8 +36,17 @@ export default function ReportsPage() {
   const router = useRouter();
   const { localize } = useAppTranslations();
   const { ws, isConnected, isExhausted, auth } = useDerivWSContext();
-  const { authState, accounts, activeAccount, login, signUp, logout, switchAccount } = auth;
-  const trading = useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated: !!auth.wsUrl, onAuthWSFailed: logout });
+  const {
+    authState,
+    accounts,
+    activeAccount,
+    login,
+    loginWithApiToken,
+    signUp,
+    logout,
+    switchAccount,
+  } = auth;
+  const trading = useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated: authState === 'authenticated', onAuthWSFailed: logout });
   const digitContractLabels = getDigitContractLabels(localize);
 
   useEffect(() => {
@@ -65,6 +70,7 @@ export default function ReportsPage() {
         accounts={accounts}
         activeAccount={activeAccount}
         onLogin={login}
+        onApiTokenLogin={loginWithApiToken}
         onSignUp={signUp}
         onLogout={logout}
         onSwitchAccount={switchAccount}

@@ -11,7 +11,7 @@ import { getApiBaseUrl } from '../config/urls';
  * Fetch the list of trading accounts for the authenticated user.
  */
 export async function fetchAccounts(
-  authInfo: AuthInfo,
+  authInfo: Pick<AuthInfo, 'access_token'>,
   clientId: string
 ): Promise<DerivAccount[]> {
   const response = await fetch(`${getApiBaseUrl()}/accounts`, {
@@ -44,7 +44,7 @@ export async function fetchAccounts(
  */
 export async function getWebSocketOTP(
   accountId: string,
-  authInfo: AuthInfo,
+  authInfo: Pick<AuthInfo, 'access_token'>,
   clientId: string
 ): Promise<string> {
   const response = await fetch(`${getApiBaseUrl()}/accounts/${accountId}/otp`, {

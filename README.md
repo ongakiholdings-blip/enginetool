@@ -1,6 +1,6 @@
 # Digits Trading App
 
-A self-hosted digit trading app built on the Deriv WebSocket API. Supports Matches/Differs, Over/Under, and Even/Odd contract types with real-time tick streaming and digit frequency statistics.
+A self-hosted digit trading app built on the Deriv WebSocket API. Supports Matches/Differs and Over/Under contract types with real-time tick streaming, digit frequency statistics, and a right-side panel for open positions and recent transactions.
 
 ## Prerequisites
 
@@ -53,6 +53,8 @@ npm run dev
 ```
 
 The app is available at `http://localhost:3000`.
+
+You can authenticate with Deriv OAuth or choose **API token** in the header. API-token login requires a token with the `trade` permission. The token is sent directly to Deriv's REST API as a bearer token to retrieve accounts and an authenticated WebSocket URL; it is kept in session storage only for the current browser session.
 
 ## Step 4: Build for Production
 

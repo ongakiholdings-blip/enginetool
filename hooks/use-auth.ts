@@ -8,6 +8,10 @@ import {
   refreshAccessToken,
   fetchAccounts,
   getWebSocketOTP,
+  authorizeApiToken,
+  storeDerivApiToken,
+  getDerivApiToken,
+  clearDerivApiToken,
   logout as coreLogout,
   getAuthInfo,
   getDerivAccounts,
@@ -129,7 +133,9 @@ export interface UseAuthReturn {
   activeAccount: DerivAccount | null;
   activeAccountId: string | null;
   wsUrl: string | undefined;
+  apiToken: string | undefined;
   login: () => Promise<void>;
+  loginWithApiToken: (token: string) => Promise<void>;
   signUp: () => Promise<void>;
   logout: () => void;
   switchAccount: (accountId: string) => Promise<void>;
@@ -140,7 +146,11 @@ export interface UseAuthReturn {
 export function useAuth(): UseAuthReturn {
   const { currentLang } = useAppTranslations();
   const [authState, setAuthState] = useState<AuthState>(() =>
-    typeof window !== 'undefined' && getAuthInfo() ? 'authenticated' : 'unauthenticated'
+    typeof window !== 'undefined' && getDerivApiToken()
+      ? 'authenticating'
+      : typeof window !== 'undefined' && getAuthInfo()
+        ? 'authenticated'
+        : 'unauthenticated'
   );
   const [accounts, setAccounts] = useState<DerivAccount[]>(() => {
     if (typeof window === 'undefined') return [];
@@ -151,6 +161,7 @@ export function useAuth(): UseAuthReturn {
     return getActiveLoginId() ?? null;
   });
   const [wsUrl, setWsUrl] = useState<string | undefined>(undefined);
+  const [apiToken, setApiToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const initRef = useRef(false);
   const activeAccountIdRef = useRef<string | null>(null);
@@ -220,6 +231,32 @@ export function useAuth(): UseAuthReturn {
     initRef.current = true;
 
     const init = async () => {
+      const storedApiToken = getDerivApiToken();
+      if (storedApiToken) {
+        try {
+          const session = await authorizeApiToken(
+            storedApiToken,
+            getAuthConfig().clientId,
+            getActiveLoginId()
+          );
+          setAccounts(session.accounts);
+          storeDerivAccounts(session.accounts);
+          setActiveLoginId(session.activeAccount.account_id);
+          setAccountType(session.activeAccount.account_type);
+          setActiveAccountId(session.activeAccount.account_id);
+          setWsUrl(session.wsUrl);
+          setApiToken(storedApiToken);
+          setAuthState('authenticated');
+        } catch (err) {
+          clearAllAuthData();
+          setAccounts([]);
+          setActiveAccountId(null);
+          setError(err instanceof Error ? err.message : 'API token authorization failed.');
+          setAuthState('unauthenticated');
+        }
+        return;
+      }
+
       const url = new URL(window.location.href);
       const code = url.searchParams.get('code');
 
@@ -309,10 +346,21 @@ export function useAuth(): UseAuthReturn {
 
       const accountId = activeAccountIdRef.current;
       const authInfo = getAuthInfo();
-      if (!authInfo || !accountId) return;
+      if (!accountId || (!apiToken && !authInfo)) return;
 
       try {
-        const otpUrl = await fetchOTPUrl(accountId, authInfo);
+        let otpUrl: string;
+        if (apiToken) {
+          otpUrl = await getWebSocketOTP(
+            accountId,
+            { access_token: apiToken },
+            getAuthConfig().clientId
+          );
+        } else if (authInfo) {
+          otpUrl = await fetchOTPUrl(accountId, authInfo);
+        } else {
+          return;
+        }
         setWsUrl(otpUrl);
       } catch {
         clearAllAuthData();
@@ -323,7 +371,7 @@ export function useAuth(): UseAuthReturn {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [authState, fetchOTPUrl]);
+  }, [authState, fetchOTPUrl, apiToken]);
 
   // Phase 1: Initiate login — includes partner attribution params, resolving a
   // fresh per-user Scaleo token via the BFF proxy when needed (non-blocking).
@@ -331,6 +379,31 @@ export function useAuth(): UseAuthReturn {
   const login = useCallback(async () => {
     await initiateLogin(await getAuthConfigWithReferral(currentLang));
   }, [currentLang]);
+
+  const loginWithApiToken = useCallback(async (token: string) => {
+    const trimmedToken = token.trim();
+    if (!trimmedToken) throw new Error('Enter an API token.');
+
+    setAuthState('authenticating');
+    setError(null);
+    try {
+      const session = await authorizeApiToken(trimmedToken, getAuthConfig().clientId);
+      clearAllAuthData();
+      storeDerivApiToken(trimmedToken);
+      storeDerivAccounts(session.accounts);
+      setActiveLoginId(session.activeAccount.account_id);
+      setAccountType(session.activeAccount.account_type);
+      setAccounts(session.accounts);
+      setActiveAccountId(session.activeAccount.account_id);
+      setWsUrl(session.wsUrl);
+      setApiToken(trimmedToken);
+      setAuthState('authenticated');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'API token authorization failed.');
+      setAuthState('unauthenticated');
+      throw err;
+    }
+  }, []);
 
   // Initiate sign-up — adds prompt=registration and partner attribution params
   const signUp = useCallback(async () => {
@@ -340,9 +413,11 @@ export function useAuth(): UseAuthReturn {
   // Logout: close WS (handled by useDerivWS cleanup), clear storage, reset state
   const logout = useCallback(() => {
     coreLogout();
+    clearDerivApiToken();
     setAccounts([]);
     setActiveAccountId(null);
     setWsUrl(undefined);
+    setApiToken(undefined);
     setAuthState('unauthenticated');
     setError(null);
   }, []);
@@ -352,13 +427,24 @@ export function useAuth(): UseAuthReturn {
   const switchAccount = useCallback(
     async (accountId: string) => {
       const authInfo = getAuthInfo();
-      if (!authInfo) return;
+      if (!authInfo && !apiToken) return;
 
       try {
         const account = accounts.find(a => a.account_id === accountId);
         if (account) setAccountType(account.account_type);
         // Fetch OTP before updating accountId so reconnectKey and url are consistent
-        const otpUrl = await fetchOTPUrl(accountId, authInfo);
+        let otpUrl: string;
+        if (apiToken) {
+          otpUrl = await getWebSocketOTP(
+            accountId,
+            { access_token: apiToken },
+            getAuthConfig().clientId
+          );
+        } else if (authInfo) {
+          otpUrl = await fetchOTPUrl(accountId, authInfo);
+        } else {
+          return;
+        }
         setActiveLoginId(accountId);
         setActiveAccountId(accountId);
         setWsUrl(otpUrl);
@@ -366,7 +452,7 @@ export function useAuth(): UseAuthReturn {
         setError(err instanceof Error ? err.message : 'Account switch failed');
       }
     },
-    [fetchOTPUrl, accounts]
+    [fetchOTPUrl, accounts, apiToken]
   );
 
   // Keep the account snapshot and its persisted fallback synchronized with
@@ -404,7 +490,9 @@ export function useAuth(): UseAuthReturn {
     activeAccount,
     activeAccountId,
     wsUrl,
+    apiToken,
     login,
+    loginWithApiToken,
     signUp,
     logout,
     switchAccount,

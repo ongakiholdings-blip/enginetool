@@ -90,5 +90,10 @@
   "-839094775": "Atrás",
   "-885388417": "Último dígito:",
   "-905535397": "Digit Differs",
-  "-912577498": "Matches"
+  "-912577498": "Matches",
+  "-647983549": "Introduce un token API de Deriv con permiso de trading. Tu token se conservará solo durante esta sesión del navegador.",
+  "-993974976": "Conectar con token",
+  "-2101059099": "Conectando...",
+  "904696726": "Token API",
+  "2046016128": "Iniciar sesión con token API"
 }

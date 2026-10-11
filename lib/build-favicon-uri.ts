@@ -26,7 +26,7 @@ export function buildFaviconUri(): string | null {
   }
 
   const appName =
-    process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim() || 'Deriv App';
+    process.env.NEXT_PUBLIC_DERIV_APP_NAME?.trim() || 'FROSTY-DBOT';
   const letter = appName.trim().charAt(0).toUpperCase() || 'A';
 
   // The App Builder patches globals.css with the user's chosen brand colour as

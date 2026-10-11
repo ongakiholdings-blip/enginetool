@@ -3,6 +3,7 @@ import type { AuthInfo, DerivAccount, StoredCSRFToken, StoredCodeVerifier } from
 const CSRF_TOKEN_KEY = 'oauth_csrf_token';
 const CODE_VERIFIER_KEY = 'oauth_code_verifier';
 const AUTH_INFO_KEY = 'auth_info';
+const API_TOKEN_KEY = 'deriv_api_token';
 const DERIV_ACCOUNTS_KEY = 'deriv_accounts';
 const ACTIVE_LOGINID_KEY = 'active_loginid';
 const ACCOUNT_TYPE_KEY = 'account_type';
@@ -76,6 +77,18 @@ export function clearAuthInfo(): void {
   localStorage.removeItem(AUTH_INFO_KEY);
 }
 
+export function storeDerivApiToken(token: string): void {
+  sessionStorage.setItem(API_TOKEN_KEY, token);
+}
+
+export function getDerivApiToken(): string | null {
+  return sessionStorage.getItem(API_TOKEN_KEY);
+}
+
+export function clearDerivApiToken(): void {
+  sessionStorage.removeItem(API_TOKEN_KEY);
+}
+
 // --- Deriv Accounts ---
 
 export function storeDerivAccounts(accounts: DerivAccount[]): void {
@@ -118,6 +131,7 @@ export function clearAllAuthData(): void {
   clearCSRFToken();
   clearCodeVerifier();
   clearAuthInfo();
+  clearDerivApiToken();
   clearDerivAccounts();
   localStorage.removeItem(ACTIVE_LOGINID_KEY);
   localStorage.removeItem(ACCOUNT_TYPE_KEY);

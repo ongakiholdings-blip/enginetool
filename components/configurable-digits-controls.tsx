@@ -20,7 +20,6 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { GripVertical, LineChart } from 'lucide-react';
 import { Localize } from '@deriv-com/translations';
 import { useRearrangeDrag } from '@/hooks/use-rearrange-drag';
@@ -70,7 +69,6 @@ function getDigitTradeTypeOptions(
   return [
     { value: 'matches-differs', label: localize('Matches/Differs') },
     { value: 'over-under', label: localize('Over/Under') },
-    { value: 'even-odd', label: localize('Even/Odd') },
   ];
 }
 
@@ -85,10 +83,6 @@ function getContractModeOptions(
     'over-under': [
       { value: 'DIGITOVER', label: localize('Over') },
       { value: 'DIGITUNDER', label: localize('Under') },
-    ],
-    'even-odd': [
-      { value: 'DIGITEVEN', label: localize('Even') },
-      { value: 'DIGITODD', label: localize('Odd') },
     ],
   };
 }
@@ -106,14 +100,7 @@ function getPredictionText(
       return localize('be over');
     case 'DIGITUNDER':
       return localize('be under');
-    case 'DIGITEVEN':
-      return localize('be even');
-    case 'DIGITODD':
-      return localize('be odd');
   }
-}
-function showDigitInPrediction(contractMode: ContractMode): boolean {
-  return contractMode !== 'DIGITEVEN' && contractMode !== 'DIGITODD';
 }
 
 /**
@@ -242,6 +229,7 @@ export interface ConfigurableDigitsControlsProps {
    * two columns only the controls column keeps the link, so it renders once.
    */
   showPositionsLink?: boolean;
+  onViewPositions?: () => void;
 }
 
 export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProps) {
@@ -279,6 +267,7 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     pinBuy,
     keys,
     showPositionsLink = true,
+    onViewPositions,
   } = props;
 
   const { localize } = useAppTranslations();
@@ -470,9 +459,8 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
 
   // ── Digit stats + digit selection (3 styles) ────────────────────────────
   // Real control = DigitStatsBar (includes digit selection). All variants keep
-  // onDigitSelect / selectedDigit, and digit stats only show for non-even/odd.
+  // onDigitSelect / selectedDigit.
   const renderDigitStats = () => {
-    if (tradeType === 'even-odd') return null;
     const maxPct = Math.max(...digitStats.percentages);
     const minPct = Math.min(...digitStats.percentages);
 
@@ -582,13 +570,13 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
           onValueChange={(value) => {
             if (value) onContractModeChange(value as ContractMode);
           }}
-          className="w-full gap-0 rounded-full bg-muted p-1"
+          className="w-full gap-0 rounded-full border border-border/70 bg-muted/80 p-1"
         >
           {modeOptions.map((opt) => (
             <ToggleGroupItem
               key={opt.value}
               value={opt.value}
-              className="flex-1 rounded-full text-sm font-medium text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:font-bold data-[state=on]:shadow-sm hover:text-foreground"
+              className="flex-1 rounded-full text-sm font-medium text-muted-foreground transition-all data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-bold data-[state=on]:shadow-md data-[state=on]:shadow-primary/20 hover:text-foreground"
             >
               {opt.label}
             </ToggleGroupItem>
@@ -780,7 +768,6 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
   // Real control = the bordered prediction box. Same data in every variant.
   const renderPrediction = () => {
     const predictionText = getPredictionText(contractMode, localize);
-    const showDigit = showDigitInPrediction(contractMode);
     const payoutEl =
       proposal || isProposalLoading ? (
         isProposalLoading ? (
@@ -800,14 +787,10 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
           <p className="text-xs font-medium sm:text-sm">
             <Localize i18n_default_text="Last digit of the price will" />{' '}
             <span className="text-primary font-bold">{predictionText}</span>
-            {showDigit && (
-              <>
-                {' '}
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {selectedDigit}
-                </span>
-              </>
-            )}
+            {' '}
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+              {selectedDigit}
+            </span>
           </p>
           {(proposal || isProposalLoading) && (
             <div className="flex items-center justify-between border-t border-border pt-1">
@@ -825,14 +808,10 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
           <span className="font-medium">
             <Localize i18n_default_text="Last digit will" />{' '}
             <span className="text-primary font-bold">{predictionText}</span>
-            {showDigit && (
-              <>
-                {' '}
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {selectedDigit}
-                </span>
-              </>
-            )}
+            {' '}
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+              {selectedDigit}
+            </span>
           </span>
           {payoutEl}
         </div>
@@ -843,14 +822,10 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
           <span className="font-medium">
             <Localize i18n_default_text="Will" />{' '}
             <span className="text-primary font-bold">{predictionText}</span>
-            {showDigit && (
-              <>
-                {' '}
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-                  {selectedDigit}
-                </span>
-              </>
-            )}
+            {' '}
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+              {selectedDigit}
+            </span>
           </span>
           {payoutEl ?? (
             <span className="text-muted-foreground">
@@ -993,10 +968,13 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
         return <div key={key}>{content}</div>;
       })}
       {isAuthenticated && showPositionsLink && (
-        <Button asChild variant="ghost" className="w-full text-sm text-muted-foreground hover:text-foreground">
-          <Link href="/reports">
-            <Localize i18n_default_text="View your positions →" />
-          </Link>
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full text-sm text-muted-foreground hover:text-foreground"
+          onClick={onViewPositions}
+        >
+          <Localize i18n_default_text="View your positions →" />
         </Button>
       )}
     </div>

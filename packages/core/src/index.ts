@@ -13,6 +13,7 @@ export {
   OAuthError,
   fetchAccounts,
   getWebSocketOTP,
+  authorizeApiToken,
   logout,
   generateRandomBase64url,
   sha256Base64url,
@@ -26,6 +27,9 @@ export {
   storeAuthInfo,
   getAuthInfo,
   clearAuthInfo,
+  storeDerivApiToken,
+  getDerivApiToken,
+  clearDerivApiToken,
   storeDerivAccounts,
   getDerivAccounts,
   clearDerivAccounts,
@@ -38,6 +42,7 @@ export {
   parseLandingParams,
   resolveReferralViaProxy,
 } from './auth';
+export type { ApiTokenSession } from './auth';
 
 // Types
 export type {

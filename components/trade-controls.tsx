@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import Link from 'next/link';
 import { Localize } from '@deriv-com/translations';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +36,7 @@ interface TradeControlsProps {
   buyError: string | null;
   onClearBuyResult: () => void;
   isAuthenticated?: boolean;
+  onViewPositions?: () => void;
   /**
    * Pins the Buy button above the footer (fixed) instead of inline. Driven by
    * the same useIsMobile state that picks the view's layout branch — a CSS
@@ -58,10 +58,6 @@ function getContractModeOptions(
       { value: 'DIGITOVER', label: localize('Over') },
       { value: 'DIGITUNDER', label: localize('Under') },
     ],
-    'even-odd': [
-      { value: 'DIGITEVEN', label: localize('Even') },
-      { value: 'DIGITODD', label: localize('Odd') },
-    ],
   };
 }
 
@@ -78,15 +74,7 @@ function getPredictionText(
       return localize('be over');
     case 'DIGITUNDER':
       return localize('be under');
-    case 'DIGITEVEN':
-      return localize('be even');
-    case 'DIGITODD':
-      return localize('be odd');
   }
-}
-
-function showDigitInPrediction(contractMode: ContractMode): boolean {
-  return contractMode !== 'DIGITEVEN' && contractMode !== 'DIGITODD';
 }
 
 export function TradeControls({
@@ -108,6 +96,7 @@ export function TradeControls({
   buyError,
   onClearBuyResult,
   isAuthenticated,
+  onViewPositions,
   isMobile,
 }: TradeControlsProps) {
   const { localize } = useAppTranslations();
@@ -151,7 +140,7 @@ export function TradeControls({
           <ToggleGroupItem
             key={opt.value}
             value={opt.value}
-            className="flex-1 rounded-full text-sm font-medium text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:font-bold data-[state=on]:shadow-sm hover:text-foreground"
+            className="flex-1 rounded-full text-sm font-medium text-muted-foreground transition-all data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:font-bold data-[state=on]:shadow-md data-[state=on]:shadow-primary/20 hover:text-foreground"
           >
             {opt.label}
           </ToggleGroupItem>
@@ -196,7 +185,7 @@ export function TradeControls({
         </div>
       </div>
 
-      <div className="rounded-lg border border-border p-2 sm:p-3 bg-muted/20 space-y-1.5 sm:space-y-2">
+      <div className="space-y-1.5 rounded-2xl border border-border/80 bg-accent/40 p-3 shadow-inner sm:space-y-2 sm:p-4">
         <p className="text-[11px] sm:text-xs text-muted-foreground mb-0 sm:mb-1">
           <Localize i18n_default_text="Prediction" />
         </p>
@@ -205,14 +194,10 @@ export function TradeControls({
           <span className="text-primary font-bold">
             {getPredictionText(contractMode, localize)}
           </span>
-          {showDigitInPrediction(contractMode) && (
-            <>
-              {' '}
-              <span className="inline-flex w-5 h-5 rounded-full bg-primary text-primary-foreground items-center justify-center text-xs font-bold">
-                {selectedDigit}
-              </span>
-            </>
-          )}
+          {' '}
+          <span className="inline-flex w-5 h-5 rounded-full bg-primary text-primary-foreground items-center justify-center text-xs font-bold">
+            {selectedDigit}
+          </span>
         </p>
         {(proposal || isProposalLoading) && (
           <div className="flex items-center justify-between pt-1 border-t border-border">
@@ -254,10 +239,13 @@ export function TradeControls({
       </div>
 
       {isAuthenticated && (
-        <Button asChild variant="ghost" className="w-full text-sm text-muted-foreground hover:text-foreground">
-          <Link href="/reports">
-            <Localize i18n_default_text="View your positions →" />
-          </Link>
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full text-sm text-muted-foreground hover:text-foreground"
+          onClick={onViewPositions}
+        >
+          <Localize i18n_default_text="View your positions →" />
         </Button>
       )}
     </div>

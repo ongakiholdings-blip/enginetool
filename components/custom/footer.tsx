@@ -10,6 +10,8 @@ export function Footer() {
         <span className="font-semibold text-foreground">
           <Localize i18n_default_text="Deriv" />
         </span>
+        {' '}and{' '}
+        <span className="font-semibold text-foreground">DbotPulse</span>
       </p>
     </footer>
   );
@@ -19,7 +21,7 @@ export function Footer() {
  * The bottom band the footer lives in on the mobile no-code layout.
  *
  * Both Buy placements end in this one box, so toggling the pin never moves
- * "Powered by Deriv" or resizes the strip around it. They used to hard-code a
+ * "Powered by Deriv and DbotPulse" or resizes the strip around it. They used to hard-code a
  * box each — the pinned bar rendered the footer flush at 24px while the
  * unpinned branch wrapped it in `py-2` — which shifted the footer by 8px as the
  * pin toggled.
@@ -36,7 +38,7 @@ export function Footer() {
  */
 export function FooterBar({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="shrink-0 border-t border-border bg-background">
+    <div className="shrink-0 border-t border-border/70 bg-background/80 backdrop-blur-xl">
       {children}
       <div className="py-2 text-center">
         <Footer />

@@ -38,13 +38,22 @@ export function LiveDigits({
   const providerLogo = useLogoSrc();
   const logoSrc = logoSrcOverride ?? providerLogo;
   const { ws, isConnected, isExhausted, auth } = useDerivWSContext();
-  const { authState, accounts, activeAccount, login, signUp, logout, switchAccount } = auth;
+  const {
+    authState,
+    accounts,
+    activeAccount,
+    login,
+    loginWithApiToken,
+    signUp,
+    logout,
+    switchAccount,
+  } = auth;
 
   const trading = useDigitsTrading({
     ws,
     isConnected,
     isExhausted,
-    isAuthenticated: !!auth.wsUrl,
+    isAuthenticated: authState === 'authenticated',
     onAuthWSFailed: logout,
   });
 
@@ -54,6 +63,7 @@ export function LiveDigits({
       accounts={accounts}
       activeAccount={activeAccount}
       onLogin={login}
+      onApiTokenLogin={loginWithApiToken}
       onSignUp={signUp}
       onLogout={logout}
       onSwitchAccount={switchAccount}
@@ -88,6 +98,13 @@ export function LiveDigits({
       buyResult={trading.buyResult}
       buyError={trading.buyError}
       clearBuyResult={trading.clearBuyResult}
+      openPositions={trading.openPositions}
+      closedPositions={trading.closedPositions}
+      refreshClosedPositions={trading.refreshClosedPositions}
+      sellContract={trading.sellContract}
+      sellingId={trading.sellingId}
+      sellError={trading.sellError}
+      clearSellError={trading.clearSellError}
       appConfig={appConfig}
       editMode={editMode}
       onSelect={onSelect}
