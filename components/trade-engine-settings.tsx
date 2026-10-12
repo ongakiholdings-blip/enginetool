@@ -154,7 +154,7 @@ export function TradeEngineSettings({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          <Localize i18n_default_text="Different tones signal interval start and end. With at least 800 recent ticks, the engine tests the strategy on the newer half and skips the interval unless its 95% lower confidence bound beats the proposal's break-even rate by 2 percentage points." />
+          <Localize i18n_default_text="For Over/Under, the engine waits for digit 6 in a rising trend, 5 in a falling trend, or either digit if trend is flat. Different tones signal interval start and end." />
         </p>
       </div>
       <div className="space-y-2">

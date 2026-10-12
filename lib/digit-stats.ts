@@ -23,6 +23,30 @@ export function getLastDigit(price: number, pipSize: number): number {
   return parseInt(lastChar, 10);
 }
 
+export function getTrendEntryDigit(prices: number[], pipSize: number): 5 | 6 | null {
+  const trendWindow = prices.slice(-20);
+  if (
+    trendWindow.length < 20 ||
+    trendWindow.some((price) => !Number.isFinite(price)) ||
+    !Number.isInteger(pipSize) ||
+    pipSize < 0
+  ) {
+    return null;
+  }
+
+  const midpoint = trendWindow.length / 2;
+  const firstAverage =
+    trendWindow.slice(0, midpoint).reduce((total, price) => total + price, 0) / midpoint;
+  const recentAverage =
+    trendWindow.slice(midpoint).reduce((total, price) => total + price, 0) / midpoint;
+  const minimumTrend = 10 ** -pipSize;
+  const difference = recentAverage - firstAverage;
+
+  if (difference >= minimumTrend) return 6;
+  if (difference <= -minimumTrend) return 5;
+  return null;
+}
+
 /**
  * Compute digit statistics (counts and percentages) from an array of prices.
  */
@@ -69,57 +93,6 @@ export function getDigitEntryStrategy(
     return { barrier: 8 };
   }
   return { barrier: rankedDigits[rankedDigits.length - 1] };
-}
-
-export function hasConservativeExpectedValue(
-  validationCounts: number[],
-  contractMode: ContractMode,
-  barrier: number,
-  askPrice: number,
-  payout: number
-): boolean {
-  if (
-    validationCounts.length !== 10 ||
-    validationCounts.some((count) => !Number.isFinite(count) || count < 0) ||
-    !Number.isInteger(barrier) ||
-    barrier < 0 ||
-    barrier > 9 ||
-    !Number.isFinite(askPrice) ||
-    !Number.isFinite(payout) ||
-    askPrice <= 0 ||
-    payout <= askPrice
-  ) {
-    return false;
-  }
-
-  const sampleSize = validationCounts.reduce((total, count) => total + count, 0);
-  if (sampleSize < 400) return false;
-
-  let wins = 0;
-  if (contractMode === 'DIGITOVER') {
-    wins = validationCounts.slice(2).reduce((total, count) => total + count, 0);
-  } else if (contractMode === 'DIGITUNDER') {
-    wins = validationCounts.slice(0, 8).reduce((total, count) => total + count, 0);
-  } else {
-    wins = sampleSize - validationCounts[barrier];
-  }
-
-  const z = 1.96;
-  const observedRate = wins / sampleSize;
-  const zSquared = z * z;
-  const denominator = 1 + zSquared / sampleSize;
-  const lowerBound =
-    (observedRate +
-      zSquared / (2 * sampleSize) -
-      z *
-        Math.sqrt(
-          (observedRate * (1 - observedRate)) / sampleSize +
-            zSquared / (4 * sampleSize * sampleSize)
-        )) /
-    denominator;
-  const breakEvenRate = askPrice / payout;
-
-  return lowerBound > breakEvenRate + 0.02;
 }
 
 /**
