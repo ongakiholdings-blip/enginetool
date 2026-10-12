@@ -16,10 +16,11 @@ import { CurrentTickDisplay } from './current-tick-display';
 import { DigitStatsBar } from './digit-stats-bar';
 import { TradeControls } from './trade-controls';
 import { ConfigurableDigitsControls, ConfigurableBuyButton } from './configurable-digits-controls';
-import { TradeTypeChips } from '@/components/custom/trade-type-chips';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import { TransactionsPanel } from '@/components/custom/transactions-panel';
 import { ThemeToggle } from '@/components/custom/theme-toggle';
+import { PositionsTable } from '@/components/custom/positions-table';
+import { TradeEngineSettings } from './trade-engine-settings';
 import type {
   AuthState,
   DerivAccount,
@@ -31,7 +32,6 @@ import type {
 } from '@deriv/core';
 import type {
   ContractMode,
-  TradeType,
   DigitStats,
   OpenPosition,
   ClosedPosition,
@@ -52,15 +52,6 @@ const MARKET_COLUMN_KEYS: ControlKey[] = ['symbol', 'tick', 'digitStats'];
 const CONTROLS_COLUMN_KEYS: ControlKey[] = ALL_CONTROL_KEYS.filter(
   (key) => !MARKET_COLUMN_KEYS.includes(key)
 );
-
-function getDigitTradeTypeOptions(
-  localize: (text: string) => string
-): { value: TradeType; label: string }[] {
-  return [
-    { value: 'matches-differs', label: localize('Matches/Differs') },
-    { value: 'over-under', label: localize('Over/Under') },
-  ];
-}
 
 // Edit-mode stand-in for the login prompt's auth handlers — same rule as the
 // header: no OAuth navigation out of the editor.
@@ -92,8 +83,6 @@ export interface DigitsViewProps {
   pipSize: number;
 
   // Trade controls
-  tradeType: TradeType;
-  setTradeType: (type: TradeType) => void;
   contractMode: ContractMode;
   setContractMode: (mode: ContractMode) => void;
   selectedDigit: number;
@@ -105,8 +94,15 @@ export interface DigitsViewProps {
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
-  buyContract: () => Promise<void>;
   isBuying: boolean;
+  isEngineRunning: boolean;
+  intervalMinutes: 1 | 5 | 10;
+  setIntervalMinutes: (minutes: 1 | 5 | 10) => void;
+  secondsUntilNextTrade: number | null;
+  engineError: string | null;
+  canEngineTrade: boolean;
+  startEngine: () => void;
+  stopEngine: () => void;
   buyResult: BuyResult | null;
   buyError: string | null;
   clearBuyResult: () => void;
@@ -159,8 +155,6 @@ export function DigitsView({
   lastDigit,
   digitStats,
   pipSize,
-  tradeType,
-  setTradeType,
   contractMode,
   setContractMode,
   selectedDigit,
@@ -172,8 +166,15 @@ export function DigitsView({
   durationLimits,
   proposal,
   isProposalLoading,
-  buyContract,
   isBuying,
+  isEngineRunning,
+  intervalMinutes,
+  setIntervalMinutes,
+  secondsUntilNextTrade,
+  engineError,
+  canEngineTrade,
+  startEngine,
+  stopEngine,
   buyResult,
   buyError,
   clearBuyResult,
@@ -216,17 +217,42 @@ export function DigitsView({
   // regression.
   const inFlowFooter = !!appConfig && isMobile;
   const { localize } = useAppTranslations();
-  const digitTradeTypeOptions = getDigitTradeTypeOptions(localize);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [clearedClosedPositionIds, setClearedClosedPositionIds] = useState<Set<number>>(
+    () => new Set()
+  );
   const handleViewPositions = useCallback(() => setShowTransactions(true), []);
+  const accountId = activeAccount?.account_id;
+  const visibleClosedPositions = useMemo(
+    () =>
+      closedPositions.filter(
+        (position) => !clearedClosedPositionIds.has(position.contract_id)
+      ),
+    [closedPositions, clearedClosedPositionIds]
+  );
+  const resetClosedHistory = useCallback(() => {
+    setClearedClosedPositionIds((cleared) => {
+      const next = new Set(cleared);
+      for (const position of closedPositions) {
+        next.add(position.contract_id);
+      }
+      return next;
+    });
+  }, [closedPositions]);
 
-  // Logged-out Buy opens the login/sign-up prompt instead of sending a buy that
-  // would fail with a "Purchase Failed" toast. One gate covers every Buy
-  // surface (standard, configurable, pinned). Edit mode stays inert — the
-  // editor owns Buy clicks there, and its auth actions are already no-ops.
-  const handleBuy = useCallback(async () => {
+  useEffect(() => {
+    setClearedClosedPositionIds(new Set());
+  }, [accountId]);
+
+  // Starting the engine requires an authenticated account. Once started, each
+  // order uses the same proposal and purchase path as a manual trade.
+  const handleToggleEngine = useCallback(() => {
     if (editMode) return;
+    if (isEngineRunning) {
+      stopEngine();
+      return;
+    }
     // Mid-OAuth (the ?code= callback) the header already shows a login in
     // progress — don't stack a "please log in" prompt on top of it.
     if (authState === 'authenticating') return;
@@ -234,8 +260,8 @@ export function DigitsView({
       setShowLoginPrompt(true);
       return;
     }
-    await buyContract();
-  }, [editMode, authState, buyContract]);
+    startEngine();
+  }, [editMode, isEngineRunning, authState, startEngine, stopEngine]);
 
   // Purchase feedback for the configurable layouts lives HERE, not in
   // ConfigurableDigitsControls: the desktop no-code layout mounts that
@@ -331,8 +357,6 @@ export function DigitsView({
         lastDigit={lastDigit}
         digitStats={digitStats}
         pipSize={pipSize}
-        tradeType={tradeType}
-        onTradeTypeChange={setTradeType}
         contractMode={contractMode}
         onContractModeChange={setContractMode}
         selectedDigit={selectedDigit}
@@ -344,9 +368,15 @@ export function DigitsView({
         durationLimits={durationLimits}
         proposal={proposal}
         isProposalLoading={isProposalLoading}
-        onBuy={handleBuy}
+        onToggleEngine={handleToggleEngine}
         onViewPositions={handleViewPositions}
         isBuying={isBuying}
+        isEngineRunning={isEngineRunning}
+        intervalMinutes={intervalMinutes}
+        setIntervalMinutes={setIntervalMinutes}
+        secondsUntilNextTrade={secondsUntilNextTrade}
+        engineError={engineError}
+        canTrade={canEngineTrade}
         isConnected={isConnected}
         isAuthenticated={authState === 'authenticated'}
         editMode={editMode}
@@ -356,6 +386,31 @@ export function DigitsView({
         onReorder={onReorder}
         pinBuy={pinBuy}
       />
+    ) : null;
+
+  const renderTransactionHistory = () =>
+    !editMode ? (
+      <section className="w-full max-w-7xl mx-auto px-3 py-4 pb-24 sm:px-4">
+        <PositionsTable
+          openPositions={openPositions}
+          closedPositions={visibleClosedPositions}
+          onSell={sellContract}
+          sellingId={sellingId}
+          sellError={sellError}
+          onClearSellError={clearSellError}
+          contractTypeLabels={{
+            DIGITMATCH: localize('Digit Match'),
+            DIGITDIFF: localize('Digit Differs'),
+            DIGITOVER: localize('Digit Over'),
+            DIGITUNDER: localize('Digit Under'),
+          }}
+          title="Transaction history"
+          initialFilter="all"
+          showFilter={false}
+          onResetClosedHistory={resetClosedHistory}
+          className="mt-0"
+        />
+      </section>
     ) : null;
 
   return (
@@ -384,6 +439,26 @@ export function DigitsView({
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             <div className="mx-auto flex w-full max-w-md flex-col gap-3 px-3 py-3">
               {isLoading ? <Skeleton className="h-[420px] w-full rounded-xl" /> : renderConfigurable()}
+              {pinBuy && !editMode && (
+                <div className="space-y-2">
+                  <TradeEngineSettings
+                    isRunning={isEngineRunning}
+                    isBuying={isBuying}
+                    intervalMinutes={intervalMinutes}
+                    setIntervalMinutes={setIntervalMinutes}
+                    secondsUntilNextTrade={secondsUntilNextTrade}
+                    canTrade={canEngineTrade}
+                    engineError={engineError}
+                  />
+                  <p className="text-center text-xs text-muted-foreground">
+                    <Localize i18n_default_text="Starts immediately, then repeats at the selected interval." />
+                  </p>
+                  <p className="text-center text-xs text-muted-foreground">
+                    <Localize i18n_default_text="Automatically places trades using your selected stake, symbol, and contract." />
+                  </p>
+                </div>
+              )}
+              {renderTransactionHistory()}
             </div>
           </div>
         ) : (
@@ -430,31 +505,19 @@ export function DigitsView({
                 </Card>
               </div>
             )}
+            {renderTransactionHistory()}
           </div>
         )
       ) : isMobile ? (
-        /* Standard mobile layout (unchanged): trade type chips + main card. */
+        /* Standard mobile layout: market data and engine controls. */
         <div className="flex w-full max-w-7xl mx-auto flex-col px-3 py-2 sm:px-4 sm:py-4 gap-2 sm:gap-3 pb-10">
           {isLoading ? (
             <>
-              {/* Trade type chips skeleton */}
-              <div className="flex gap-2">
-                <Skeleton className="h-8 w-32 rounded-full" />
-                <Skeleton className="h-8 w-28 rounded-full" />
-                <Skeleton className="h-8 w-24 rounded-full" />
-              </div>
               {/* Main card skeleton */}
               <Skeleton className="w-full h-[420px] rounded-xl" />
             </>
           ) : (
             <>
-              <TradeTypeChips
-                className="shrink-0"
-                value={tradeType}
-                options={digitTradeTypeOptions}
-                onValueChange={setTradeType}
-              />
-
               <Card className="mb-12 shrink-0 ring-1 ring-primary/10">
                 <CardContent className="flex flex-col p-3 pt-3 sm:p-6 sm:pt-4 pb-2 sm:pb-6">
                   {/* Symbol selector + tick display */}
@@ -486,7 +549,6 @@ export function DigitsView({
                     {/* Trade controls */}
                     <div className="pt-4 sm:pt-6">
                       <TradeControls
-                        tradeType={tradeType}
                         contractMode={contractMode}
                         onContractModeChange={setContractMode}
                         selectedDigit={selectedDigit}
@@ -498,9 +560,15 @@ export function DigitsView({
                         durationLimits={durationLimits}
                         proposal={proposal}
                         isProposalLoading={isProposalLoading}
-                        onBuy={handleBuy}
+                        onToggleEngine={handleToggleEngine}
                         onViewPositions={handleViewPositions}
                         isBuying={isBuying}
+                        isEngineRunning={isEngineRunning}
+                        intervalMinutes={intervalMinutes}
+                        setIntervalMinutes={setIntervalMinutes}
+                        secondsUntilNextTrade={secondsUntilNextTrade}
+                        engineError={engineError}
+                        canTrade={canEngineTrade}
                         buyResult={buyResult}
                         buyError={buyError}
                         onClearBuyResult={clearBuyResult}
@@ -513,11 +581,12 @@ export function DigitsView({
               </Card>
             </>
           )}
+          {renderTransactionHistory()}
         </div>
       ) : (
         /* Standard desktop layout: the SAME two-column split as the no-code
            desktop above — market data (symbol, tick, digit stats) left,
-           controls (trade type chips + trade controls) right — so both paths
+           controls (contract type + trade engine) right — so both paths
            look identical. The `lg:` guard plays the same first-paint role as
            in the no-code grid (useIsMobile initialises to false). */
         <div className="flex w-full max-w-5xl mx-auto flex-col px-4 py-4 pb-24">
@@ -552,16 +621,7 @@ export function DigitsView({
               </Card>
               <Card data-testid="controls-column">
                 <CardContent className="flex flex-col gap-4 pt-4">
-                  {/* Rendered inside the controls card, so the edge fade is
-                      drawn in the card colour rather than the page background. */}
-                  <TradeTypeChips
-                    backdrop="card"
-                    value={tradeType}
-                    options={digitTradeTypeOptions}
-                    onValueChange={setTradeType}
-                  />
                   <TradeControls
-                    tradeType={tradeType}
                     contractMode={contractMode}
                     onContractModeChange={setContractMode}
                     selectedDigit={selectedDigit}
@@ -573,9 +633,15 @@ export function DigitsView({
                     durationLimits={durationLimits}
                     proposal={proposal}
                     isProposalLoading={isProposalLoading}
-                    onBuy={handleBuy}
+                    onToggleEngine={handleToggleEngine}
                     onViewPositions={handleViewPositions}
                     isBuying={isBuying}
+                    isEngineRunning={isEngineRunning}
+                    intervalMinutes={intervalMinutes}
+                    setIntervalMinutes={setIntervalMinutes}
+                    secondsUntilNextTrade={secondsUntilNextTrade}
+                    engineError={engineError}
+                    canTrade={canEngineTrade}
                     buyResult={buyResult}
                     buyError={buyError}
                     onClearBuyResult={clearBuyResult}
@@ -585,6 +651,7 @@ export function DigitsView({
               </Card>
             </div>
           )}
+          {renderTransactionHistory()}
         </div>
       )}
 
@@ -594,14 +661,21 @@ export function DigitsView({
           rearrangeMode={rearrangeMode}
           selected={selectedKey === 'buy'}
           onSelect={() => onSelect?.('buy')}
-          label={localize('Buy button')}
+          label={localize('Engine button')}
         >
           <ConfigurableBuyButton
             variant={appConfig!.styles.buy}
             isConnected={isConnected}
-            proposal={proposal}
-            onBuy={handleBuy}
+            isProposalReady={!!proposal}
+            onToggleEngine={handleToggleEngine}
             isBuying={isBuying}
+            isEngineRunning={isEngineRunning}
+            intervalMinutes={intervalMinutes}
+            setIntervalMinutes={setIntervalMinutes}
+            secondsUntilNextTrade={secondsUntilNextTrade}
+            engineError={engineError}
+            canTrade={canEngineTrade}
+            showSettings={!!editMode}
           />
         </PinnedBuyBar>
       ) : inFlowFooter ? (

@@ -20,7 +20,6 @@ export type { PositionFilter } from '@/components/custom/positions-table';
 // Digit-specific types
 
 export type ContractMode =
-  | 'DIGITMATCH'
   | 'DIGITDIFF'
   | 'DIGITOVER'
   | 'DIGITUNDER';

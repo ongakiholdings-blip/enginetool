@@ -54,6 +54,7 @@ export function LiveDigits({
     isConnected,
     isExhausted,
     isAuthenticated: authState === 'authenticated',
+    accountId: auth.activeAccountId,
     onAuthWSFailed: logout,
   });
 
@@ -80,8 +81,6 @@ export function LiveDigits({
       lastDigit={trading.lastDigit}
       digitStats={trading.digitStats}
       pipSize={trading.pipSize}
-      tradeType={trading.tradeType}
-      setTradeType={trading.setTradeType}
       contractMode={trading.contractMode}
       setContractMode={trading.setContractMode}
       selectedDigit={trading.selectedDigit}
@@ -93,8 +92,20 @@ export function LiveDigits({
       durationLimits={trading.durationLimits}
       proposal={trading.proposal}
       isProposalLoading={trading.isProposalLoading}
-      buyContract={trading.buyContract}
       isBuying={trading.isBuying}
+      isEngineRunning={trading.isEngineRunning}
+      intervalMinutes={trading.intervalMinutes}
+      setIntervalMinutes={trading.setIntervalMinutes}
+      secondsUntilNextTrade={trading.secondsUntilNextTrade}
+      engineError={trading.engineError}
+      canEngineTrade={
+        authState === 'authenticated' &&
+        isConnected &&
+        !!trading.proposal &&
+        !trading.isBuying
+      }
+      startEngine={trading.startEngine}
+      stopEngine={trading.stopEngine}
       buyResult={trading.buyResult}
       buyError={trading.buyError}
       clearBuyResult={trading.clearBuyResult}

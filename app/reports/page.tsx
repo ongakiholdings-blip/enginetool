@@ -46,7 +46,14 @@ export default function ReportsPage() {
     logout,
     switchAccount,
   } = auth;
-  const trading = useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated: authState === 'authenticated', onAuthWSFailed: logout });
+  const trading = useDigitsTrading({
+    ws,
+    isConnected,
+    isExhausted,
+    isAuthenticated: authState === 'authenticated',
+    accountId: auth.activeAccountId,
+    onAuthWSFailed: logout,
+  });
   const digitContractLabels = getDigitContractLabels(localize);
 
   useEffect(() => {

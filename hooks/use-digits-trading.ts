@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   useProposal,
   useBuy,
@@ -16,9 +16,10 @@ import type {
 import { useBaseTrading } from '@/hooks/use-base-trading';
 import type { UseBaseTradingParams } from '@/hooks/use-base-trading';
 import { computeDigitStats, getLastDigit } from '../lib/digit-stats';
-import type { ContractMode, TradeType, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
+import { useTradeEngine } from './use-trade-engine';
+import type { ContractMode, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
 
-const CONTRACT_TYPES = ['DIGITMATCH', 'DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
+const CONTRACT_TYPES = ['DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
 
 interface UseDigitsTradingReturn {
   isConnected: boolean;
@@ -30,8 +31,6 @@ interface UseDigitsTradingReturn {
   currentTick: Tick | null;
   lastDigit: number | null;
   digitStats: DigitStats;
-  tradeType: TradeType;
-  setTradeType: (type: TradeType) => void;
   contractMode: ContractMode;
   setContractMode: (mode: ContractMode) => void;
   selectedDigit: number;
@@ -46,8 +45,14 @@ interface UseDigitsTradingReturn {
   defaultStake: number;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
-  buyContract: () => Promise<void>;
   isBuying: boolean;
+  isEngineRunning: boolean;
+  intervalMinutes: 1 | 5 | 10;
+  setIntervalMinutes: (minutes: 1 | 5 | 10) => void;
+  secondsUntilNextTrade: number | null;
+  engineError: string | null;
+  startEngine: () => void;
+  stopEngine: () => void;
   buyResult: BuyResult | null;
   buyError: string | null;
   clearBuyResult: () => void;
@@ -60,9 +65,11 @@ interface UseDigitsTradingReturn {
   clearSellError: () => void;
 }
 
-export type UseDigitsTradingParams = Pick<UseBaseTradingParams, 'ws' | 'isConnected' | 'isExhausted' | 'isAuthenticated' | 'onAuthWSFailed'>;
+export type UseDigitsTradingParams = Pick<UseBaseTradingParams, 'ws' | 'isConnected' | 'isExhausted' | 'isAuthenticated' | 'onAuthWSFailed'> & {
+  accountId?: string | null;
+};
 
-export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated, onAuthWSFailed }: UseDigitsTradingParams): UseDigitsTradingReturn {
+export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated, onAuthWSFailed, accountId }: UseDigitsTradingParams): UseDigitsTradingReturn {
   const {
     ws: tradingWs,
     isConnected: tradingIsConnected,
@@ -87,24 +94,10 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   } = useBaseTrading({ ws, isConnected, isExhausted, isAuthenticated, onAuthWSFailed, contractTypes: CONTRACT_TYPES });
 
   // Digits-specific trade state
-  const [tradeType, setTradeTypeRaw] = useState<TradeType>('matches-differs');
-  const [contractMode, setContractMode] = useState<ContractMode>('DIGITMATCH');
+  const [contractMode, setContractMode] = useState<ContractMode>('DIGITDIFF');
   const [selectedDigit, setSelectedDigit] = useState<number>(5);
   const [stake, setStake] = useState<string>('10');
   const [duration, setDuration] = useState<number>(5);
-
-  // Reset contract mode to the first option of the selected trade type
-  const setTradeType = useCallback((type: TradeType) => {
-    setTradeTypeRaw(type);
-    switch (type) {
-      case 'matches-differs':
-        setContractMode('DIGITMATCH');
-        break;
-      case 'over-under':
-        setContractMode('DIGITOVER');
-        break;
-    }
-  }, []);
 
   const digitStats: DigitStats = useMemo(
     () => computeDigitStats(prices, pipSize),
@@ -145,7 +138,12 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
       durationUnit: 't',
       basis: 'stake' as const,
       currency: 'USD',
-      barrier: selectedDigit,
+      barrier:
+        contractMode === 'DIGITOVER'
+          ? 1
+          : contractMode === 'DIGITUNDER'
+            ? 8
+            : selectedDigit,
     };
   }, [activeSymbol, contractMode, stake, duration, selectedDigit, isBuying]);
 
@@ -157,6 +155,20 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     }
   }, [proposal, buyWithProposal]);
 
+  const engine = useTradeEngine({
+    canTrade: isAuthenticated && isConnected && !!proposal && !isBuying,
+    placeTrade: buyContract,
+  });
+  const previousAccountId = useRef(accountId);
+
+  useEffect(() => {
+    if (previousAccountId.current !== accountId) {
+      previousAccountId.current = accountId;
+      engine.stopEngine();
+    }
+    if (!isAuthenticated) engine.stopEngine();
+  }, [accountId, isAuthenticated, engine.stopEngine]);
+
   return {
     isConnected,
     isLoading,
@@ -167,8 +179,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     currentTick,
     lastDigit,
     digitStats,
-    tradeType,
-    setTradeType,
     contractMode,
     setContractMode,
     selectedDigit,
@@ -183,8 +193,8 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     defaultStake,
     proposal,
     isProposalLoading: isConnected && proposalParams !== null && proposal === null,
-    buyContract,
     isBuying,
+    ...engine,
     buyResult,
     buyError,
     clearBuyResult,

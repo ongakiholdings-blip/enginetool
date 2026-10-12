@@ -9,16 +9,16 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
+import { TradeEngineSettings } from './trade-engine-settings';
+import type { TradeIntervalMinutes } from '@/hooks/use-trade-engine';
 import type {
   ContractMode,
-  TradeType,
   DurationLimits,
   ProposalInfo,
   BuyResult,
 } from '../lib/types';
 
 interface TradeControlsProps {
-  tradeType: TradeType;
   contractMode: ContractMode;
   onContractModeChange: (mode: ContractMode) => void;
   selectedDigit: number;
@@ -30,8 +30,14 @@ interface TradeControlsProps {
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
-  onBuy: () => void;
+  onToggleEngine: () => void;
   isBuying: boolean;
+  isEngineRunning: boolean;
+  intervalMinutes: TradeIntervalMinutes;
+  setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
+  secondsUntilNextTrade: number | null;
+  engineError: string | null;
+  canTrade: boolean;
   buyResult: BuyResult | null;
   buyError: string | null;
   onClearBuyResult: () => void;
@@ -48,17 +54,12 @@ interface TradeControlsProps {
 
 function getContractModeOptions(
   localize: (text: string) => string
-): Record<TradeType, { value: ContractMode; label: string }[]> {
-  return {
-    'matches-differs': [
-      { value: 'DIGITMATCH', label: localize('Matches') },
-      { value: 'DIGITDIFF', label: localize('Differs') },
-    ],
-    'over-under': [
-      { value: 'DIGITOVER', label: localize('Over') },
-      { value: 'DIGITUNDER', label: localize('Under') },
-    ],
-  };
+): { value: ContractMode; label: string }[] {
+  return [
+    { value: 'DIGITOVER', label: localize('Over 1') },
+    { value: 'DIGITUNDER', label: localize('Under 8') },
+    { value: 'DIGITDIFF', label: localize('Differs') },
+  ];
 }
 
 function getPredictionText(
@@ -66,19 +67,16 @@ function getPredictionText(
   localize: (text: string) => string
 ): string {
   switch (contractMode) {
-    case 'DIGITMATCH':
-      return localize('match');
     case 'DIGITDIFF':
       return localize('differ from');
     case 'DIGITOVER':
-      return localize('be over');
+      return localize('be over 1');
     case 'DIGITUNDER':
-      return localize('be under');
+      return localize('be under 8');
   }
 }
 
 export function TradeControls({
-  tradeType,
   contractMode,
   onContractModeChange,
   selectedDigit,
@@ -90,8 +88,14 @@ export function TradeControls({
   durationLimits,
   proposal,
   isProposalLoading,
-  onBuy,
+  onToggleEngine,
   isBuying,
+  isEngineRunning,
+  intervalMinutes,
+  setIntervalMinutes,
+  secondsUntilNextTrade,
+  engineError,
+  canTrade,
   buyResult,
   buyError,
   onClearBuyResult,
@@ -124,15 +128,16 @@ export function TradeControls({
     }
   }, [buyResult, onClearBuyResult, localize]);
 
-  const modeOptions = getContractModeOptions(localize)[tradeType];
+  const modeOptions = getContractModeOptions(localize);
 
   return (
     <div className="space-y-2 sm:space-y-4">
       <ToggleGroup
         type="single"
         value={contractMode}
-        onValueChange={value => {
-          if (value) onContractModeChange(value as ContractMode);
+        onValueChange={(value) => {
+          const option = modeOptions.find((candidate) => candidate.value === value);
+          if (option) onContractModeChange(option.value);
         }}
         className="w-full gap-0 rounded-full bg-muted p-1"
       >
@@ -194,10 +199,14 @@ export function TradeControls({
           <span className="text-primary font-bold">
             {getPredictionText(contractMode, localize)}
           </span>
-          {' '}
-          <span className="inline-flex w-5 h-5 rounded-full bg-primary text-primary-foreground items-center justify-center text-xs font-bold">
-            {selectedDigit}
-          </span>
+          {contractMode === 'DIGITDIFF' && (
+            <>
+              {' '}
+              <span className="inline-flex w-5 h-5 rounded-full bg-primary text-primary-foreground items-center justify-center text-xs font-bold">
+                {selectedDigit}
+              </span>
+            </>
+          )}
         </p>
         {(proposal || isProposalLoading) && (
           <div className="flex items-center justify-between pt-1 border-t border-border">
@@ -215,7 +224,24 @@ export function TradeControls({
         )}
       </div>
 
-      {/* Buy button — fixed above footer on mobile, inline on desktop */}
+      <TradeEngineSettings
+        isRunning={isEngineRunning}
+        isBuying={isBuying}
+        intervalMinutes={intervalMinutes}
+        setIntervalMinutes={setIntervalMinutes}
+        secondsUntilNextTrade={secondsUntilNextTrade}
+        canTrade={canTrade}
+        engineError={engineError}
+      />
+
+      <p className="text-center text-xs text-muted-foreground">
+        <Localize i18n_default_text="Starts immediately, then repeats at the selected interval." />
+      </p>
+      <p className="text-center text-xs text-muted-foreground">
+        <Localize i18n_default_text="Automatically places trades using your selected stake, symbol, and contract." />
+      </p>
+
+      {/* Engine control — fixed above footer on mobile, inline on desktop */}
       <div
         className={
           isMobile
@@ -225,16 +251,16 @@ export function TradeControls({
       >
         <Button
           className="w-full h-10 rounded-full px-6 sm:h-11 sm:px-8"
-          disabled={!isConnected || !proposal || isBuying}
-          onClick={onBuy}
+          variant={isEngineRunning ? 'destructive' : 'default'}
+          disabled={!isConnected || (!isEngineRunning && (!proposal || isBuying))}
+          aria-pressed={isEngineRunning}
+          onClick={onToggleEngine}
         >
-          {isBuying
-            ? localize('Purchasing...')
-            : proposal
-              ? localize('Buy @ {{price}} USD', {
-                  price: proposal.askPrice.toFixed(2),
-                })
-              : localize('Buy Contract')}
+          {isEngineRunning
+            ? localize('Stop engine')
+            : isBuying
+              ? localize('Preparing engine...')
+              : localize('Start engine')}
         </Button>
       </div>
 

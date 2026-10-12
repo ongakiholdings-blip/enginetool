@@ -56,6 +56,12 @@ The app is available at `http://localhost:3000`.
 
 You can authenticate with Deriv OAuth or choose **API token** in the header. API-token login requires a token with the `trade` permission. The token is sent directly to Deriv's REST API as a bearer token to retrieve accounts and an authenticated WebSocket URL; it is kept in session storage only for the current browser session.
 
+## Automated Trading Engine
+
+Choose **Over 1**, **Under 8**, or **Differs** and set the stake, contract duration, and trade interval. **Start engine** places the first trade immediately, then submits another trade after each selected interval (1, 5, or 10 minutes). Over 1 and Under 8 use fixed digit barriers; Differs uses the selected digit. The engine requires an authenticated trading account and stops when you log out or switch accounts. **Stop engine** prevents future trades; it does not cancel a purchase request already in progress.
+
+The main screen shows active and closed positions in a transaction history below the trading controls. **Reset history** hides the currently listed closed positions from this screen; it does not close active positions or delete records from Deriv.
+
 ## Step 4: Build for Production
 
 ```bash

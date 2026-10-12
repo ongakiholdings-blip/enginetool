@@ -34,6 +34,14 @@ interface PositionsTableProps {
   contractTypeLabels?: Record<string, string>;
   /** Merged onto the root wrapper (spacing, max-height, overflow). */
   className?: string;
+  /** Optional title for embedded transaction history tables. */
+  title?: string;
+  /** Initial filter for embedded transaction history tables. */
+  initialFilter?: PositionFilter;
+  /** Hide the position filter and show every position. */
+  showFilter?: boolean;
+  /** Clears locally hidden closed history without affecting active positions. */
+  onResetClosedHistory?: () => void;
 }
 
 function getValueColHeader(
@@ -59,6 +67,17 @@ function formatContractType(
   return barrier !== undefined ? `${label} (${barrier})` : label;
 }
 
+function formatAmount(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2) : '—';
+}
+
+function getProfitPercentage(profit: number, buyPrice: number): number | null {
+  if (!Number.isFinite(profit) || !Number.isFinite(buyPrice) || buyPrice === 0) {
+    return null;
+  }
+  return (profit / buyPrice) * 100;
+}
+
 export function PositionsTable({
   openPositions,
   closedPositions,
@@ -68,9 +87,13 @@ export function PositionsTable({
   onClearSellError,
   contractTypeLabels = {},
   className,
+  title = 'Report',
+  initialFilter = 'open',
+  showFilter = true,
+  onResetClosedHistory,
 }: PositionsTableProps) {
   const { localize } = useAppTranslations();
-  const [filter, setFilter] = useState<PositionFilter>('open');
+  const [filter, setFilter] = useState<PositionFilter>(initialFilter);
 
   useEffect(() => {
     if (sellError) {
@@ -81,34 +104,58 @@ export function PositionsTable({
 
   const totalCount = openPositions.length + closedPositions.length;
 
-  const visibleOpen = filter === 'open' || filter === 'all' ? openPositions : [];
-  const visibleClosed = filter === 'closed' || filter === 'all' ? closedPositions : [];
+  const visibleOpen =
+    !showFilter || filter === 'open' || filter === 'all' ? openPositions : [];
+  const visibleClosed =
+    !showFilter || filter === 'closed' || filter === 'all' ? closedPositions : [];
 
   return (
     <div className={cn('mt-6', className)}>
       {/* Header */}
-      <div className="grid grid-cols-3 items-center mb-3">
-        <div />
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center mb-3 gap-2">
+        {onResetClosedHistory ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-self-start"
+            disabled={closedPositions.length === 0}
+            onClick={onResetClosedHistory}
+          >
+            <Localize i18n_default_text="Reset history" />
+          </Button>
+        ) : (
+          <div />
+        )}
         <h2 className="text-sm font-semibold text-center">
-          <Localize i18n_default_text="Report" />
+          <Localize i18n_default_text={title} />
         </h2>
-        <Select value={filter} onValueChange={(value) => setFilter(value as PositionFilter)}>
-          <SelectTrigger className="w-28 ml-auto">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="open">
-              {localize('Open ({{count}})', { count: openPositions.length })}
-            </SelectItem>
-            <SelectItem value="closed">
-              {localize('Closed ({{count}})', { count: closedPositions.length })}
-            </SelectItem>
-            <SelectItem value="all">
-              {localize('All ({{count}})', { count: totalCount })}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        {showFilter ? (
+          <Select value={filter} onValueChange={(value) => setFilter(value as PositionFilter)}>
+            <SelectTrigger className="w-28 ml-auto">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">
+                {localize('Open ({{count}})', { count: openPositions.length })}
+              </SelectItem>
+              <SelectItem value="closed">
+                {localize('Closed ({{count}})', { count: closedPositions.length })}
+              </SelectItem>
+              <SelectItem value="all">
+                {localize('All ({{count}})', { count: totalCount })}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        ) : (
+          <div />
+        )}
       </div>
+      {onResetClosedHistory && (
+        <p className="mb-3 text-xs text-muted-foreground">
+          <Localize i18n_default_text="Reset history only clears closed positions from this list. Active positions are kept." />
+        </p>
+      )}
 
       {/* Desktop: table */}
       <div className="hidden lg:block rounded-lg border border-border overflow-hidden">
@@ -124,7 +171,9 @@ export function PositionsTable({
               <TableHead className="text-right">
                 <Localize i18n_default_text="Stake" />
               </TableHead>
-              <TableHead className="text-right">{getValueColHeader(filter, localize)}</TableHead>
+              <TableHead className="text-right">
+                {getValueColHeader(showFilter ? filter : 'all', localize)}
+              </TableHead>
               <TableHead className="text-right">
                 <Localize i18n_default_text="P&L" />
               </TableHead>
@@ -202,6 +251,11 @@ function OpenPositionRow({
 }) {
   const { localize } = useAppTranslations();
   const profit = parseFloat(pos.profit);
+  const buyPrice = parseFloat(pos.buy_price);
+  const providedProfitPct = Number(pos.profit_percentage);
+  const profitPct = Number.isFinite(providedProfitPct)
+    ? providedProfitPct
+    : getProfitPercentage(profit, buyPrice);
   const isProfit = profit >= 0;
 
   return (
@@ -211,12 +265,12 @@ function OpenPositionRow({
       </TableCell>
       <TableCell className="text-muted-foreground">{getSymbolDisplayName(pos.underlying_symbol)}</TableCell>
       <TableCell className="text-right">
-        {parseFloat(pos.buy_price).toFixed(2)} {pos.currency}
+        {formatAmount(buyPrice)} {pos.currency}
       </TableCell>
       <TableCell className="text-right">
-        {parseFloat(pos.bid_price).toFixed(2)} {pos.currency}
+        {formatAmount(parseFloat(pos.bid_price))} {pos.currency}
       </TableCell>
-      <ProfitCell profit={profit} profitPct={pos.profit_percentage} currency={pos.currency} isProfit={isProfit} />
+      <ProfitCell profit={profit} profitPct={profitPct} currency={pos.currency} isProfit={isProfit} />
       <TableCell className="text-right">
         <Button
           size="sm"
@@ -238,8 +292,9 @@ function ClosedPositionRow({
   pos: ClosedPosition;
   contractTypeLabels: Record<string, string>;
 }) {
-  const profit = pos.sell_price - pos.buy_price;
-  const profitPct = (profit / pos.buy_price) * 100;
+  const buyPrice = Number(pos.buy_price);
+  const profit = Number(pos.sell_price) - buyPrice;
+  const profitPct = getProfitPercentage(profit, buyPrice);
   const isProfit = profit >= 0;
 
   return (
@@ -249,10 +304,10 @@ function ClosedPositionRow({
       </TableCell>
       <TableCell className="text-muted-foreground">{getSymbolDisplayName(pos.underlying_symbol)}</TableCell>
       <TableCell className="text-right">
-        {pos.buy_price.toFixed(2)}
+        {formatAmount(buyPrice)}
       </TableCell>
       <TableCell className="text-right">
-        {pos.sell_price.toFixed(2)}
+        {formatAmount(Number(pos.sell_price))}
       </TableCell>
       <ProfitCell profit={profit} profitPct={profitPct} currency="" isProfit={isProfit} />
       <TableCell />
@@ -267,7 +322,7 @@ function ProfitCell({
   isProfit,
 }: {
   profit: number;
-  profitPct: number;
+  profitPct: number | null;
   currency: string;
   isProfit: boolean;
 }) {
@@ -278,10 +333,12 @@ function ProfitCell({
         isProfit ? 'text-green-600' : 'text-destructive'
       )}
     >
-      {isProfit ? '+' : ''}{profit.toFixed(2)}{currency ? ` ${currency}` : ''}
-      <span className="text-xs font-normal ml-1 opacity-70">
-        ({isProfit ? '+' : ''}{profitPct.toFixed(1)}%)
-      </span>
+      {isProfit ? '+' : ''}{formatAmount(profit)}{currency ? ` ${currency}` : ''}
+      {profitPct !== null && (
+        <span className="text-xs font-normal ml-1 opacity-70">
+          ({isProfit ? '+' : ''}{profitPct.toFixed(1)}%)
+        </span>
+      )}
     </TableCell>
   );
 }

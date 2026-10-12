@@ -28,6 +28,10 @@ function formatDuration(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
+function formatAmount(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2) : '—';
+}
+
 export function ClosedPositionCard({
   pos,
   contractTypeLabels,
@@ -36,7 +40,7 @@ export function ClosedPositionCard({
     pos.contract_type,
     contractTypeLabels
   );
-  const profit = pos.sell_price - pos.buy_price;
+  const profit = Number(pos.sell_price) - Number(pos.buy_price);
   const isProfit = profit >= 0;
   const duration = pos.sell_time - pos.purchase_time;
 
@@ -79,7 +83,7 @@ export function ClosedPositionCard({
             )}
           >
             {isProfit ? '+' : ''}
-            {profit.toFixed(2)}
+            {formatAmount(profit)}
           </p>
         </div>
         <div>
@@ -87,7 +91,7 @@ export function ClosedPositionCard({
             <Localize i18n_default_text="Sell price:" />
           </p>
           <p className="text-base font-bold text-foreground">
-            {pos.sell_price.toFixed(2)}
+            {formatAmount(Number(pos.sell_price))}
           </p>
         </div>
         <div>
@@ -95,7 +99,7 @@ export function ClosedPositionCard({
             <Localize i18n_default_text="Stake:" />
           </p>
           <p className="text-base font-bold text-foreground">
-            {pos.buy_price.toFixed(2)}
+            {formatAmount(Number(pos.buy_price))}
           </p>
         </div>
         <div>
@@ -103,7 +107,7 @@ export function ClosedPositionCard({
             <Localize i18n_default_text="Payout:" />
           </p>
           <p className="text-base font-bold text-foreground">
-            {pos.payout.toFixed(2)}
+            {formatAmount(Number(pos.payout))}
           </p>
         </div>
       </div>

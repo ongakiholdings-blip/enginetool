@@ -37,16 +37,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { TradeTypeChips } from '@/components/custom/trade-type-chips';
 import { SymbolSelector } from '@/components/custom/symbol-selector';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { getSubmarketDisplayName } from '@/lib/active-symbols-display-names';
 import { cn } from '@/lib/utils';
+import { TradeEngineSettings } from './trade-engine-settings';
 import type { ActiveSymbol, Tick, ProposalInfo, DurationLimits } from '@deriv/core';
 import { CurrentTickDisplay } from './current-tick-display';
 import { DigitStatsBar } from './digit-stats-bar';
-import type { ContractMode, TradeType, DigitStats } from '../lib/types';
+import type { ContractMode, DigitStats } from '../lib/types';
 import type { ControlKey, DigitsAppConfig, StyleVariant } from '../lib/app-config';
+import type { TradeIntervalMinutes } from '@/hooks/use-trade-engine';
 
 /** Human labels shown on each draggable block in rearrange mode. */
 function getBlockLabels(localize: (text: string) => string): Record<ControlKey, string> {
@@ -59,32 +60,18 @@ function getBlockLabels(localize: (text: string) => string): Record<ControlKey, 
     stake: localize('Stake'),
     duration: localize('Duration'),
     prediction: localize('Prediction'),
-    buy: localize('Buy button'),
+    buy: localize('Engine button'),
   };
-}
-
-function getDigitTradeTypeOptions(
-  localize: (text: string) => string
-): { value: TradeType; label: string }[] {
-  return [
-    { value: 'matches-differs', label: localize('Matches/Differs') },
-    { value: 'over-under', label: localize('Over/Under') },
-  ];
 }
 
 function getContractModeOptions(
   localize: (text: string) => string
-): Record<TradeType, { value: ContractMode; label: string }[]> {
-  return {
-    'matches-differs': [
-      { value: 'DIGITMATCH', label: localize('Matches') },
-      { value: 'DIGITDIFF', label: localize('Differs') },
-    ],
-    'over-under': [
-      { value: 'DIGITOVER', label: localize('Over') },
-      { value: 'DIGITUNDER', label: localize('Under') },
-    ],
-  };
+): { value: ContractMode; label: string }[] {
+  return [
+    { value: 'DIGITOVER', label: localize('Over 1') },
+    { value: 'DIGITUNDER', label: localize('Under 8') },
+    { value: 'DIGITDIFF', label: localize('Differs') },
+  ];
 }
 
 function getPredictionText(
@@ -92,19 +79,17 @@ function getPredictionText(
   localize: (text: string) => string
 ): string {
   switch (contractMode) {
-    case 'DIGITMATCH':
-      return localize('match');
     case 'DIGITDIFF':
       return localize('differ from');
     case 'DIGITOVER':
-      return localize('be over');
+      return localize('be over 1');
     case 'DIGITUNDER':
-      return localize('be under');
+      return localize('be under 8');
   }
 }
 
 /**
- * The Buy button, in its three configurable styles.
+ * The engine button, in its three configurable styles.
  *
  * Exported because the button has two homes: inline in the reorderable column
  * (the default), or lifted into the pinned bottom bar when `buy.pinned` is on —
@@ -114,34 +99,51 @@ function getPredictionText(
 export interface ConfigurableBuyButtonProps {
   variant: StyleVariant;
   isConnected: boolean;
-  proposal: ProposalInfo | null;
-  onBuy: () => void;
+  isProposalReady: boolean;
+  onToggleEngine: () => void;
   isBuying: boolean;
+  isEngineRunning: boolean;
+  intervalMinutes: TradeIntervalMinutes;
+  setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
+  secondsUntilNextTrade: number | null;
+  engineError: string | null;
+  canTrade: boolean;
+  showSettings?: boolean;
 }
 
 export function ConfigurableBuyButton({
   variant,
   isConnected,
-  proposal,
-  onBuy,
+  isProposalReady,
   isBuying,
+  onToggleEngine,
+  isEngineRunning,
+  intervalMinutes,
+  setIntervalMinutes,
+  secondsUntilNextTrade,
+  canTrade,
+  engineError,
+  showSettings = true,
 }: ConfigurableBuyButtonProps) {
   const { localize } = useAppTranslations();
 
-  const disabled = !isConnected || !proposal || isBuying;
-  const label = isBuying
-    ? localize('Purchasing...')
-    : proposal
-      ? localize('Buy @ {{price}} USD', { price: proposal.askPrice.toFixed(2) })
-      : localize('Buy Contract');
+  const disabled =
+    !isConnected || (!isEngineRunning && (!isProposalReady || isBuying));
+  const label = isEngineRunning
+    ? localize('Stop engine')
+    : isBuying
+      ? localize('Preparing engine...')
+      : localize('Start engine');
 
   const variants: Record<StyleVariant, () => React.ReactNode> = {
     // a — pill (current)
     a: () => (
       <Button
         className="h-10 w-full rounded-full px-6 sm:h-11 sm:px-8"
+        variant={isEngineRunning ? 'destructive' : 'default'}
         disabled={disabled}
-        onClick={onBuy}
+        aria-pressed={isEngineRunning}
+        onClick={onToggleEngine}
       >
         {label}
       </Button>
@@ -149,9 +151,14 @@ export function ConfigurableBuyButton({
     // Block — squared, bold.
     b: () => (
       <Button
-        className="h-14 w-full rounded-md bg-primary text-base font-bold text-primary-foreground hover:bg-primary/90"
+        className={cn(
+          'h-14 w-full rounded-md text-base font-bold',
+          !isEngineRunning && 'bg-primary text-primary-foreground hover:bg-primary/90'
+        )}
+        variant={isEngineRunning ? 'destructive' : 'default'}
         disabled={disabled}
-        onClick={onBuy}
+        aria-pressed={isEngineRunning}
+        onClick={onToggleEngine}
       >
         {label}
       </Button>
@@ -159,15 +166,44 @@ export function ConfigurableBuyButton({
     // Gradient background.
     c: () => (
       <Button
-        className="h-14 w-full rounded-xl bg-gradient-to-r from-primary to-primary/70 font-semibold text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90"
+        className={cn(
+          'h-14 w-full rounded-xl font-semibold',
+          !isEngineRunning &&
+            'bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90'
+        )}
+        variant={isEngineRunning ? 'destructive' : 'default'}
         disabled={disabled}
-        onClick={onBuy}
+        aria-pressed={isEngineRunning}
+        onClick={onToggleEngine}
       >
         {label}
       </Button>
     ),
   };
-  return (variants[variant] ?? variants.a)();
+  return (
+    <div className="space-y-2">
+      {showSettings && (
+        <>
+          <TradeEngineSettings
+            isRunning={isEngineRunning}
+            isBuying={isBuying}
+            intervalMinutes={intervalMinutes}
+            setIntervalMinutes={setIntervalMinutes}
+            secondsUntilNextTrade={secondsUntilNextTrade}
+            canTrade={canTrade}
+            engineError={engineError}
+          />
+          <p className="text-center text-xs text-muted-foreground">
+            <Localize i18n_default_text="Starts immediately, then repeats at the selected interval." />
+          </p>
+          <p className="text-center text-xs text-muted-foreground">
+            <Localize i18n_default_text="Automatically places trades using your selected stake, symbol, and contract." />
+          </p>
+        </>
+      )}
+      {(variants[variant] ?? variants.a)()}
+    </div>
+  );
 }
 
 export interface ConfigurableDigitsControlsProps {
@@ -183,8 +219,6 @@ export interface ConfigurableDigitsControlsProps {
   pipSize: number;
 
   // Trade controls
-  tradeType: TradeType;
-  onTradeTypeChange: (type: TradeType) => void;
   contractMode: ContractMode;
   onContractModeChange: (mode: ContractMode) => void;
   selectedDigit: number;
@@ -196,8 +230,14 @@ export interface ConfigurableDigitsControlsProps {
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
-  onBuy: () => void;
+  onToggleEngine: () => void;
   isBuying: boolean;
+  isEngineRunning: boolean;
+  intervalMinutes: TradeIntervalMinutes;
+  setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
+  secondsUntilNextTrade: number | null;
+  engineError: string | null;
+  canTrade: boolean;
   isConnected: boolean;
   isAuthenticated?: boolean;
 
@@ -242,8 +282,6 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     lastDigit,
     digitStats,
     pipSize,
-    tradeType,
-    onTradeTypeChange,
     contractMode,
     onContractModeChange,
     selectedDigit,
@@ -255,8 +293,14 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     durationLimits,
     proposal,
     isProposalLoading,
-    onBuy,
+    onToggleEngine,
     isBuying,
+    isEngineRunning,
+    intervalMinutes,
+    setIntervalMinutes,
+    secondsUntilNextTrade,
+    engineError,
+    canTrade,
     isConnected,
     isAuthenticated,
     editMode,
@@ -272,7 +316,6 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
 
   const { localize } = useAppTranslations();
   const blockLabels = getBlockLabels(localize);
-  const digitTradeTypeOptions = getDigitTradeTypeOptions(localize);
   const contractModeOptions = getContractModeOptions(localize);
 
   const rearrange = useRearrangeDrag<ControlKey>(config.order, (next) => onReorder?.(next));
@@ -293,69 +336,6 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     const el = rowRefs.current[selectedKey];
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [editMode, selectedKey]);
-
-  // ── Trade type (3 styles) ───────────────────────────────────────────────
-  // Real control = TradeTypeChips. Each variant calls onTradeTypeChange (which
-  // keeps the setTradeType behaviour — it resets contract mode upstream).
-  const renderTradeType = () => {
-    const variants: Record<StyleVariant, () => React.ReactNode> = {
-      // a — pill chips (current)
-      a: () => (
-        // Rendered inside the controls card, so the edge fade is drawn in the
-        // card colour rather than the page background.
-        <TradeTypeChips
-          backdrop="card"
-          value={tradeType}
-          options={digitTradeTypeOptions}
-          onValueChange={onTradeTypeChange}
-        />
-      ),
-      // Segmented — <ToggleGroup> styled like a segmented control.
-      b: () => (
-        <ToggleGroup
-          type="single"
-          value={tradeType}
-          onValueChange={(value) => {
-            const opt = digitTradeTypeOptions.find((option) => option.value === value);
-            if (opt) onTradeTypeChange(opt.value);
-          }}
-          className="w-full gap-0 rounded-md bg-muted p-1"
-        >
-          {digitTradeTypeOptions.map((opt) => (
-            <ToggleGroupItem
-              key={opt.value}
-              value={opt.value}
-              className="flex-1 rounded text-xs font-medium text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:font-semibold data-[state=on]:shadow-sm hover:text-foreground"
-            >
-              {opt.label}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      ),
-      // Dropdown — <Select>.
-      c: () => (
-        <Select
-          value={tradeType}
-          onValueChange={(value) => {
-            const opt = digitTradeTypeOptions.find((option) => option.value === value);
-            if (opt) onTradeTypeChange(opt.value);
-          }}
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {digitTradeTypeOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ),
-    };
-    return (variants[config.styles.tradeType] ?? variants.a)();
-  };
 
   // ── Symbol picker (3 styles) ────────────────────────────────────────────
   // Real control = SymbolSelector. Every variant still switches symbols.
@@ -559,7 +539,7 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
   // ── Contract mode (3 styles) ────────────────────────────────────────────
   // Real control = ToggleGroup. Every variant keeps onContractModeChange.
   const renderContractMode = () => {
-    const modeOptions = contractModeOptions[tradeType];
+    const modeOptions = contractModeOptions;
 
     const variants: Record<StyleVariant, () => React.ReactNode> = {
       // a — segmented pill (current)
@@ -568,7 +548,8 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
           type="single"
           value={contractMode}
           onValueChange={(value) => {
-            if (value) onContractModeChange(value as ContractMode);
+            const option = modeOptions.find((candidate) => candidate.value === value);
+            if (option) onContractModeChange(option.value);
           }}
           className="w-full gap-0 rounded-full border border-border/70 bg-muted/80 p-1"
         >
@@ -768,6 +749,8 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
   // Real control = the bordered prediction box. Same data in every variant.
   const renderPrediction = () => {
     const predictionText = getPredictionText(contractMode, localize);
+    const predictionDigit =
+      contractMode === 'DIGITOVER' ? 1 : contractMode === 'DIGITUNDER' ? 8 : selectedDigit;
     const payoutEl =
       proposal || isProposalLoading ? (
         isProposalLoading ? (
@@ -788,9 +771,11 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
             <Localize i18n_default_text="Last digit of the price will" />{' '}
             <span className="text-primary font-bold">{predictionText}</span>
             {' '}
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              {selectedDigit}
-            </span>
+            {contractMode === 'DIGITDIFF' && (
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {predictionDigit}
+              </span>
+            )}
           </p>
           {(proposal || isProposalLoading) && (
             <div className="flex items-center justify-between border-t border-border pt-1">
@@ -809,9 +794,11 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
             <Localize i18n_default_text="Last digit will" />{' '}
             <span className="text-primary font-bold">{predictionText}</span>
             {' '}
-            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              {selectedDigit}
-            </span>
+            {contractMode === 'DIGITDIFF' && (
+              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {predictionDigit}
+              </span>
+            )}
           </span>
           {payoutEl}
         </div>
@@ -823,9 +810,11 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
             <Localize i18n_default_text="Will" />{' '}
             <span className="text-primary font-bold">{predictionText}</span>
             {' '}
-            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
-              {selectedDigit}
-            </span>
+            {contractMode === 'DIGITDIFF' && (
+              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                {predictionDigit}
+              </span>
+            )}
           </span>
           {payoutEl ?? (
             <span className="text-muted-foreground">
@@ -838,8 +827,8 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     return (variants[config.styles.prediction] ?? variants.a)();
   };
 
-  // ── Buy (3 styles, themed) ──────────────────────────────────────────────
-  // Real control = the <Button>. Returns null when the Buy button is pinned:
+  // ── Engine (3 styles, themed) ───────────────────────────────────────────
+  // Real control = the <Button>. Returns null when the engine button is pinned:
   // the view renders it in the bottom bar, and every block loop below skips a
   // renderer that returns null.
   const renderBuy = () =>
@@ -847,14 +836,20 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
       <ConfigurableBuyButton
         variant={config.styles.buy}
         isConnected={isConnected}
-        proposal={proposal}
-        onBuy={onBuy}
+        isProposalReady={!!proposal}
+        onToggleEngine={onToggleEngine}
         isBuying={isBuying}
+        isEngineRunning={isEngineRunning}
+        intervalMinutes={intervalMinutes}
+        setIntervalMinutes={setIntervalMinutes}
+        secondsUntilNextTrade={secondsUntilNextTrade}
+        canTrade={canTrade}
+        engineError={engineError}
       />
     );
 
   const renderers: Record<ControlKey, () => React.ReactNode> = {
-    tradeType: renderTradeType,
+    tradeType: () => null,
     symbol: renderSymbol,
     tick: renderTick,
     digitStats: renderDigitStats,
