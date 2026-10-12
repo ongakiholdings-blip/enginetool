@@ -17,6 +17,7 @@ import { useBaseTrading } from '@/hooks/use-base-trading';
 import type { UseBaseTradingParams } from '@/hooks/use-base-trading';
 import { computeDigitStats, getLastDigit } from '../lib/digit-stats';
 import { useTradeEngine } from './use-trade-engine';
+import type { EngineDurationUnit } from './use-trade-engine';
 import type { ContractMode, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
 
 const CONTRACT_TYPES = ['DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
@@ -49,6 +50,11 @@ interface UseDigitsTradingReturn {
   isEngineRunning: boolean;
   intervalMinutes: 1 | 5 | 10;
   setIntervalMinutes: (minutes: 1 | 5 | 10) => void;
+  activeDuration: string;
+  setActiveDuration: (duration: string) => void;
+  activeDurationUnit: EngineDurationUnit;
+  setActiveDurationUnit: (unit: EngineDurationUnit) => void;
+  elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
   startEngine: () => void;

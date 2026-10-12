@@ -21,6 +21,7 @@ import { TransactionsPanel } from '@/components/custom/transactions-panel';
 import { ThemeToggle } from '@/components/custom/theme-toggle';
 import { PositionsTable } from '@/components/custom/positions-table';
 import { TradeEngineSettings } from './trade-engine-settings';
+import type { EngineDurationUnit } from '@/hooks/use-trade-engine';
 import type {
   AuthState,
   DerivAccount,
@@ -98,6 +99,11 @@ export interface DigitsViewProps {
   isEngineRunning: boolean;
   intervalMinutes: 1 | 5 | 10;
   setIntervalMinutes: (minutes: 1 | 5 | 10) => void;
+  activeDuration: string;
+  setActiveDuration: (duration: string) => void;
+  activeDurationUnit: EngineDurationUnit;
+  setActiveDurationUnit: (unit: EngineDurationUnit) => void;
+  elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
   canEngineTrade: boolean;
@@ -170,6 +176,11 @@ export function DigitsView({
   isEngineRunning,
   intervalMinutes,
   setIntervalMinutes,
+  activeDuration,
+  setActiveDuration,
+  activeDurationUnit,
+  setActiveDurationUnit,
+  elapsedSeconds,
   secondsUntilNextTrade,
   engineError,
   canEngineTrade,
@@ -459,6 +470,11 @@ export function DigitsView({
         isEngineRunning={isEngineRunning}
         intervalMinutes={intervalMinutes}
         setIntervalMinutes={setIntervalMinutes}
+        activeDuration={activeDuration}
+        setActiveDuration={setActiveDuration}
+        activeDurationUnit={activeDurationUnit}
+        setActiveDurationUnit={setActiveDurationUnit}
+        elapsedSeconds={elapsedSeconds}
         secondsUntilNextTrade={secondsUntilNextTrade}
         engineError={engineError}
         canTrade={canEngineTrade}
@@ -559,6 +575,11 @@ export function DigitsView({
                     isBuying={isBuying}
                     intervalMinutes={intervalMinutes}
                     setIntervalMinutes={setIntervalMinutes}
+                    activeDuration={activeDuration}
+                    setActiveDuration={setActiveDuration}
+                    activeDurationUnit={activeDurationUnit}
+                    setActiveDurationUnit={setActiveDurationUnit}
+                    elapsedSeconds={elapsedSeconds}
                     secondsUntilNextTrade={secondsUntilNextTrade}
                     canTrade={canEngineTrade}
                     engineError={engineError}
@@ -679,6 +700,11 @@ export function DigitsView({
                         isEngineRunning={isEngineRunning}
                         intervalMinutes={intervalMinutes}
                         setIntervalMinutes={setIntervalMinutes}
+                        activeDuration={activeDuration}
+                        setActiveDuration={setActiveDuration}
+                        activeDurationUnit={activeDurationUnit}
+                        setActiveDurationUnit={setActiveDurationUnit}
+                        elapsedSeconds={elapsedSeconds}
                         secondsUntilNextTrade={secondsUntilNextTrade}
                         engineError={engineError}
                         canTrade={canEngineTrade}
@@ -752,6 +778,11 @@ export function DigitsView({
                     isEngineRunning={isEngineRunning}
                     intervalMinutes={intervalMinutes}
                     setIntervalMinutes={setIntervalMinutes}
+                    activeDuration={activeDuration}
+                    setActiveDuration={setActiveDuration}
+                    activeDurationUnit={activeDurationUnit}
+                    setActiveDurationUnit={setActiveDurationUnit}
+                    elapsedSeconds={elapsedSeconds}
                     secondsUntilNextTrade={secondsUntilNextTrade}
                     engineError={engineError}
                     canTrade={canEngineTrade}
@@ -785,6 +816,11 @@ export function DigitsView({
             isEngineRunning={isEngineRunning}
             intervalMinutes={intervalMinutes}
             setIntervalMinutes={setIntervalMinutes}
+            activeDuration={activeDuration}
+            setActiveDuration={setActiveDuration}
+            activeDurationUnit={activeDurationUnit}
+            setActiveDurationUnit={setActiveDurationUnit}
+            elapsedSeconds={elapsedSeconds}
             secondsUntilNextTrade={secondsUntilNextTrade}
             engineError={engineError}
             canTrade={canEngineTrade}

@@ -47,7 +47,10 @@ import { CurrentTickDisplay } from './current-tick-display';
 import { DigitStatsBar } from './digit-stats-bar';
 import type { ContractMode, DigitStats } from '../lib/types';
 import type { ControlKey, DigitsAppConfig, StyleVariant } from '../lib/app-config';
-import type { TradeIntervalMinutes } from '@/hooks/use-trade-engine';
+import type {
+  EngineDurationUnit,
+  TradeIntervalMinutes,
+} from '@/hooks/use-trade-engine';
 
 /** Human labels shown on each draggable block in rearrange mode. */
 function getBlockLabels(localize: (text: string) => string): Record<ControlKey, string> {
@@ -105,6 +108,11 @@ export interface ConfigurableBuyButtonProps {
   isEngineRunning: boolean;
   intervalMinutes: TradeIntervalMinutes;
   setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
+  activeDuration: string;
+  setActiveDuration: (duration: string) => void;
+  activeDurationUnit: EngineDurationUnit;
+  setActiveDurationUnit: (unit: EngineDurationUnit) => void;
+  elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
   canTrade: boolean;
@@ -120,6 +128,11 @@ export function ConfigurableBuyButton({
   isEngineRunning,
   intervalMinutes,
   setIntervalMinutes,
+  activeDuration,
+  setActiveDuration,
+  activeDurationUnit,
+  setActiveDurationUnit,
+  elapsedSeconds,
   secondsUntilNextTrade,
   canTrade,
   engineError,
@@ -189,6 +202,11 @@ export function ConfigurableBuyButton({
             isBuying={isBuying}
             intervalMinutes={intervalMinutes}
             setIntervalMinutes={setIntervalMinutes}
+            activeDuration={activeDuration}
+            setActiveDuration={setActiveDuration}
+            activeDurationUnit={activeDurationUnit}
+            setActiveDurationUnit={setActiveDurationUnit}
+            elapsedSeconds={elapsedSeconds}
             secondsUntilNextTrade={secondsUntilNextTrade}
             canTrade={canTrade}
             engineError={engineError}
@@ -235,6 +253,11 @@ export interface ConfigurableDigitsControlsProps {
   isEngineRunning: boolean;
   intervalMinutes: TradeIntervalMinutes;
   setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
+  activeDuration: string;
+  setActiveDuration: (duration: string) => void;
+  activeDurationUnit: EngineDurationUnit;
+  setActiveDurationUnit: (unit: EngineDurationUnit) => void;
+  elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
   canTrade: boolean;
@@ -298,6 +321,11 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     isEngineRunning,
     intervalMinutes,
     setIntervalMinutes,
+    activeDuration,
+    setActiveDuration,
+    activeDurationUnit,
+    setActiveDurationUnit,
+    elapsedSeconds,
     secondsUntilNextTrade,
     engineError,
     canTrade,
@@ -745,6 +773,11 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
         isEngineRunning={isEngineRunning}
         intervalMinutes={intervalMinutes}
         setIntervalMinutes={setIntervalMinutes}
+        activeDuration={activeDuration}
+        setActiveDuration={setActiveDuration}
+        activeDurationUnit={activeDurationUnit}
+        setActiveDurationUnit={setActiveDurationUnit}
+        elapsedSeconds={elapsedSeconds}
         secondsUntilNextTrade={secondsUntilNextTrade}
         canTrade={canTrade}
         engineError={engineError}

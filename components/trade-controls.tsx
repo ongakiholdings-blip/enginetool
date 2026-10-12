@@ -10,7 +10,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useAppTranslations } from '@/components/custom/i18n-provider';
 import { TradeEngineSettings } from './trade-engine-settings';
-import type { TradeIntervalMinutes } from '@/hooks/use-trade-engine';
+import type {
+  EngineDurationUnit,
+  TradeIntervalMinutes,
+} from '@/hooks/use-trade-engine';
 import type {
   ContractMode,
   DurationLimits,
@@ -35,6 +38,11 @@ interface TradeControlsProps {
   isEngineRunning: boolean;
   intervalMinutes: TradeIntervalMinutes;
   setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
+  activeDuration: string;
+  setActiveDuration: (duration: string) => void;
+  activeDurationUnit: EngineDurationUnit;
+  setActiveDurationUnit: (unit: EngineDurationUnit) => void;
+  elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
   canTrade: boolean;
@@ -93,6 +101,11 @@ export function TradeControls({
   isEngineRunning,
   intervalMinutes,
   setIntervalMinutes,
+  activeDuration,
+  setActiveDuration,
+  activeDurationUnit,
+  setActiveDurationUnit,
+  elapsedSeconds,
   secondsUntilNextTrade,
   engineError,
   canTrade,
@@ -226,6 +239,11 @@ export function TradeControls({
         isBuying={isBuying}
         intervalMinutes={intervalMinutes}
         setIntervalMinutes={setIntervalMinutes}
+        activeDuration={activeDuration}
+        setActiveDuration={setActiveDuration}
+        activeDurationUnit={activeDurationUnit}
+        setActiveDurationUnit={setActiveDurationUnit}
+        elapsedSeconds={elapsedSeconds}
         secondsUntilNextTrade={secondsUntilNextTrade}
         canTrade={canTrade}
         engineError={engineError}

@@ -96,6 +96,11 @@ export function LiveDigits({
       isEngineRunning={trading.isEngineRunning}
       intervalMinutes={trading.intervalMinutes}
       setIntervalMinutes={trading.setIntervalMinutes}
+      activeDuration={trading.activeDuration}
+      setActiveDuration={trading.setActiveDuration}
+      activeDurationUnit={trading.activeDurationUnit}
+      setActiveDurationUnit={trading.setActiveDurationUnit}
+      elapsedSeconds={trading.elapsedSeconds}
       secondsUntilNextTrade={trading.secondsUntilNextTrade}
       engineError={trading.engineError}
       canEngineTrade={
