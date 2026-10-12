@@ -5,12 +5,59 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const TRADE_INTERVAL_OPTIONS = [0.5, 1, 5, 10] as const;
 const MAX_TIMEOUT_MS = 2_147_000_000;
 
+type EngineCue = 'interval-start' | 'interval-end';
+
+function playTone(context: AudioContext, frequency: number, startAt: number): void {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const duration = 0.12;
+
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(frequency, startAt);
+  gain.gain.setValueAtTime(0.0001, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.12, startAt + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(startAt);
+  oscillator.stop(startAt + duration);
+}
+
+function playEngineCue(context: AudioContext, cue: EngineCue): void {
+  const startAt = context.currentTime + 0.02;
+  const notes =
+    cue === 'interval-start'
+      ? [523.25, 659.25, 783.99]
+      : [880, 587.33];
+
+  notes.forEach((frequency, index) => {
+    playTone(context, frequency, startAt + index * 0.16);
+  });
+}
+
+function waitForDelayOrAbort(milliseconds: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, milliseconds);
+    signal.addEventListener('abort', finish, { once: true });
+  });
+}
+
 export type TradeIntervalMinutes = (typeof TRADE_INTERVAL_OPTIONS)[number];
 export type EngineDurationUnit = 'minutes' | 'hours' | 'days';
 
 interface UseTradeEngineParams {
   canTrade: boolean;
+  isTradeReady?: () => boolean;
+  prepareTrade?: (signal: AbortSignal) => Promise<void>;
   placeTrade: () => Promise<void>;
+  onTradeComplete?: () => void;
 }
 
 interface UseTradeEngineReturn {
@@ -30,7 +77,10 @@ interface UseTradeEngineReturn {
 
 export function useTradeEngine({
   canTrade,
+  isTradeReady,
+  prepareTrade,
   placeTrade,
+  onTradeComplete,
 }: UseTradeEngineParams): UseTradeEngineReturn {
   const [isEngineRunning, setIsEngineRunning] = useState(false);
   const [intervalMinutes, setIntervalMinutesState] = useState<TradeIntervalMinutes>(1);
@@ -44,17 +94,52 @@ export function useTradeEngine({
   const runningRef = useRef(false);
   const intervalRef = useRef<TradeIntervalMinutes>(1);
   const canTradeRef = useRef(canTrade);
+  const isTradeReadyRef = useRef(isTradeReady);
+  const prepareTradeRef = useRef(prepareTrade);
   const placeTradeRef = useRef(placeTrade);
+  const onTradeCompleteRef = useRef(onTradeComplete);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const endsAtRef = useRef<number | null>(null);
+  const nextTradeAtRef = useRef<number | null>(null);
+  const cycleAbortRef = useRef<AbortController | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioReadyRef = useRef<Promise<void>>(Promise.resolve());
+  const isInitialCycleRef = useRef(true);
 
   canTradeRef.current = canTrade;
+  isTradeReadyRef.current = isTradeReady;
+  prepareTradeRef.current = prepareTrade;
   placeTradeRef.current = placeTrade;
+  onTradeCompleteRef.current = onTradeComplete;
+
+  const enableEngineSounds = useCallback(() => {
+    if (typeof window === 'undefined' || !window.AudioContext) {
+      console.error('Engine notification sounds are not supported by this browser');
+      return;
+    }
+
+    const context = audioContextRef.current ?? new window.AudioContext();
+    audioContextRef.current = context;
+    if (context.state !== 'running') {
+      audioReadyRef.current = context.resume().catch((error: unknown) => {
+        console.error('Unable to enable engine notification sounds', error);
+      });
+    }
+  }, []);
+
+  const notifyInterval = useCallback((cue: EngineCue) => {
+    void audioReadyRef.current.then(() => {
+      const context = audioContextRef.current;
+      if (context?.state === 'running') playEngineCue(context, cue);
+    });
+  }, []);
 
   const stopEngine = useCallback(() => {
     runningRef.current = false;
+    cycleAbortRef.current?.abort();
+    cycleAbortRef.current = null;
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -68,6 +153,7 @@ export function useTradeEngine({
     }
     startedAtRef.current = null;
     endsAtRef.current = null;
+    nextTradeAtRef.current = null;
     setIsEngineRunning(false);
     setNextTradeAt(null);
     setSecondsUntilNextTrade(null);
@@ -105,17 +191,50 @@ export function useTradeEngine({
       return;
     }
 
-    const nextAt = Date.now() + intervalRef.current * 60_000;
-    setNextTradeAt(nextAt);
+    const nextTradeAt = nextTradeAtRef.current ?? Date.now();
+    const remaining = nextTradeAt - Date.now();
+    if (remaining > 0) {
+      timerRef.current = setTimeout(
+        () => void runCycle(),
+        Math.min(remaining, MAX_TIMEOUT_MS)
+      );
+      return;
+    }
 
+    if (!isInitialCycleRef.current) notifyInterval('interval-end');
+    isInitialCycleRef.current = false;
+    nextTradeAtRef.current = null;
+    setNextTradeAt(null);
+    const controller = new AbortController();
+    cycleAbortRef.current = controller;
     try {
-      if (canTradeRef.current) await placeTradeRef.current();
+      await prepareTradeRef.current?.(controller.signal);
+      while (
+        runningRef.current &&
+        !controller.signal.aborted &&
+        (!canTradeRef.current ||
+          (isTradeReadyRef.current && !isTradeReadyRef.current()))
+      ) {
+        if (endsAtRef.current !== null && Date.now() >= endsAtRef.current) {
+          stopEngine();
+          return;
+        }
+        await waitForDelayOrAbort(250, controller.signal);
+      }
+      if (!runningRef.current || controller.signal.aborted) return;
+      await placeTradeRef.current();
+      if (runningRef.current) {
+        onTradeCompleteRef.current?.();
+      }
     } catch (error) {
+      if (controller.signal.aborted) return;
       stopEngine();
       setEngineError(
         error instanceof Error ? error.message : 'Engine stopped after an error'
       );
       return;
+    } finally {
+      if (cycleAbortRef.current === controller) cycleAbortRef.current = null;
     }
 
     if (!runningRef.current) return;
@@ -123,19 +242,15 @@ export function useTradeEngine({
       stopEngine();
       return;
     }
-    const waitUntil =
-      endsAtRef.current === null ? nextAt : Math.min(nextAt, endsAtRef.current);
+    const waitUntil = Date.now() + intervalRef.current * 60_000;
+    nextTradeAtRef.current = waitUntil;
+    setNextTradeAt(waitUntil);
+    notifyInterval('interval-start');
     timerRef.current = setTimeout(
-      () => {
-        if (endsAtRef.current !== null && Date.now() >= endsAtRef.current) {
-          stopEngine();
-        } else {
-          void runCycle();
-        }
-      },
-      Math.max(0, waitUntil - Date.now())
+      () => void runCycle(),
+      Math.min(waitUntil - Date.now(), MAX_TIMEOUT_MS)
     );
-  }, [stopEngine]);
+  }, [notifyInterval, stopEngine]);
 
   const startEngine = useCallback(() => {
     if (runningRef.current) return;
@@ -159,15 +274,27 @@ export function useTradeEngine({
     }
 
     runningRef.current = true;
+    isInitialCycleRef.current = true;
+    enableEngineSounds();
+    notifyInterval('interval-start');
     setIsEngineRunning(true);
     const startedAt = Date.now();
     startedAtRef.current = startedAt;
     setElapsedSeconds(0);
+    nextTradeAtRef.current = startedAt;
+    setNextTradeAt(startedAt);
     endsAtRef.current =
       !hasDuration ? null : startedAt + durationSeconds * 1000;
     if (endsAtRef.current !== null) scheduleDurationStop();
     void runCycle();
-  }, [activeDuration, activeDurationUnit, runCycle, scheduleDurationStop]);
+  }, [
+    activeDuration,
+    activeDurationUnit,
+    enableEngineSounds,
+    notifyInterval,
+    runCycle,
+    scheduleDurationStop,
+  ]);
 
   const setIntervalMinutes = useCallback((minutes: TradeIntervalMinutes) => {
     if (runningRef.current || !TRADE_INTERVAL_OPTIONS.includes(minutes)) return;
@@ -213,6 +340,11 @@ export function useTradeEngine({
       runningRef.current = false;
       if (timerRef.current) clearTimeout(timerRef.current);
       if (durationTimerRef.current) clearTimeout(durationTimerRef.current);
+      if (audioContextRef.current) {
+        void audioContextRef.current.close().catch((error: unknown) => {
+          console.error('Unable to close engine notification audio', error);
+        });
+      }
     },
     []
   );

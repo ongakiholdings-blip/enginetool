@@ -15,12 +15,33 @@ import type {
 } from '@deriv/core';
 import { useBaseTrading } from '@/hooks/use-base-trading';
 import type { UseBaseTradingParams } from '@/hooks/use-base-trading';
-import { computeDigitStats, getLastDigit } from '../lib/digit-stats';
+import {
+  computeDigitStats,
+  getDigitEntryStrategy,
+  getLastDigit,
+} from '../lib/digit-stats';
+import type { DigitEntryStrategy } from '../lib/digit-stats';
+import { getEngineMarketSymbols } from '../lib/engine-market-scope';
+import type { EngineMarketScope } from '../lib/engine-market-scope';
 import { useTradeEngine } from './use-trade-engine';
 import type { EngineDurationUnit, TradeIntervalMinutes } from './use-trade-engine';
 import type { ContractMode, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
 
 const CONTRACT_TYPES = ['DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
+
+interface EngineDigitStrategy extends DigitEntryStrategy {
+  contractMode: ContractMode;
+  symbol: string;
+}
+
+interface EntrySignalWaiter {
+  symbol: string;
+  entryDigit: number;
+  afterEpoch: number;
+  resolve: () => void;
+  abort: () => void;
+  signal: AbortSignal;
+}
 
 interface UseDigitsTradingReturn {
   isConnected: boolean;
@@ -60,6 +81,9 @@ interface UseDigitsTradingReturn {
   elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
+  engineMarketScope: EngineMarketScope;
+  setEngineMarketScope: (scope: EngineMarketScope) => void;
+  canEngineMarketTrade: boolean;
   startEngine: () => void;
   stopEngine: () => void;
   buyResult: BuyResult | null;
@@ -109,6 +133,19 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   const [engineStake, setEngineStake] = useState(0.73);
   const [martingaleMultiplier, setMartingaleMultiplierState] = useState('2');
   const [martingaleError, setMartingaleError] = useState<string | null>(null);
+  const [engineMarketScope, setEngineMarketScopeState] =
+    useState<EngineMarketScope>('selected');
+  const [engineDigitStrategy, setEngineDigitStrategy] =
+    useState<EngineDigitStrategy | null>(null);
+  const engineMarketScopeRef = useRef<EngineMarketScope>('selected');
+  const expectedEngineSymbolRef = useRef<string | null>(null);
+  const activeSymbolRef = useRef(activeSymbol);
+  const activeContractModeRef = useRef(contractMode);
+  const currentTickRef = useRef(currentTick);
+  const pricesRef = useRef(prices);
+  const pipSizeRef = useRef(pipSize);
+  const entrySignalWaiterRef = useRef<EntrySignalWaiter | null>(null);
+  const proposalRef = useRef<ProposalInfo | null>(null);
   const [hasPendingEngineTrade, setHasPendingEngineTrade] = useState(false);
   const engineStakeRef = useRef(0.73);
   const sessionBaseStakeRef = useRef(0.73);
@@ -142,6 +179,28 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     () => computeDigitStats(prices, pipSize),
     [prices, pipSize]
   );
+  activeSymbolRef.current = activeSymbol;
+  activeContractModeRef.current = contractMode;
+  currentTickRef.current = currentTick;
+  pricesRef.current = prices;
+  pipSizeRef.current = pipSize;
+
+  useEffect(() => {
+    const waiter = entrySignalWaiterRef.current;
+    if (
+      !waiter ||
+      !currentTick ||
+      currentTick.symbol !== waiter.symbol ||
+      currentTick.epoch <= waiter.afterEpoch ||
+      getLastDigit(currentTick.quote, currentTick.pip_size ?? pipSize) !== waiter.entryDigit
+    ) {
+      return;
+    }
+
+    entrySignalWaiterRef.current = null;
+    waiter.signal.removeEventListener('abort', waiter.abort);
+    waiter.resolve();
+  }, [currentTick, pipSize]);
 
   const lastDigit = useMemo(() => {
     if (currentTick) {
@@ -161,6 +220,15 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     clearBuyResult,
   } = useBuy(tradingWs, tradingIsConnected);
 
+  const proposalContractMode = engineDigitStrategy?.contractMode ?? contractMode;
+  const proposalBarrier =
+    engineDigitStrategy?.barrier ??
+    (contractMode === 'DIGITOVER'
+      ? 1
+      : contractMode === 'DIGITUNDER'
+        ? 8
+        : selectedDigit);
+
   // Null out params while a buy is in-flight — forces useProposal to unsubscribe
   // the consumed proposal ID. When isBuying flips back to false, the memo returns
   // real params and useProposal re-subscribes to get a fresh proposal.
@@ -177,21 +245,25 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     }
 
     return {
-      contractType: contractMode,
+      contractType: proposalContractMode,
       symbol: activeSymbol.underlying_symbol,
       amount: engineStake,
       duration: durationNum,
       durationUnit: 't',
       basis: 'stake' as const,
       currency: 'USD',
-      barrier:
-        contractMode === 'DIGITOVER'
-          ? 1
-          : contractMode === 'DIGITUNDER'
-            ? 8
-            : selectedDigit,
+      barrier: proposalBarrier,
     };
-  }, [activeSymbol, contractMode, engineStake, duration, durationLimits, selectedDigit, isBuying]);
+  }, [
+    activeSymbol,
+    engineDigitStrategy,
+    proposalBarrier,
+    proposalContractMode,
+    engineStake,
+    duration,
+    durationLimits,
+    isBuying,
+  ]);
 
   const { proposal: receivedProposal } = useProposal(
     tradingWs,
@@ -199,7 +271,46 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     proposalParams
   );
   const proposal =
-    receivedProposal?.amount === engineStake ? receivedProposal : null;
+    receivedProposal?.amount === engineStake &&
+    receivedProposal.symbol === activeSymbol?.underlying_symbol &&
+    receivedProposal.contractType === proposalContractMode &&
+    receivedProposal.barrier === proposalBarrier
+      ? receivedProposal
+      : null;
+  proposalRef.current = proposal;
+
+  const prepareEngineTrade = useCallback(async (signal: AbortSignal) => {
+    const symbol = activeSymbolRef.current?.underlying_symbol;
+    if (!symbol) throw new Error('Select a market before starting the engine');
+
+    const mode = activeContractModeRef.current;
+    const strategy = getDigitEntryStrategy(
+      computeDigitStats(pricesRef.current, pipSizeRef.current).counts,
+      mode
+    );
+    const intervalStrategy = { ...strategy, contractMode: mode, symbol };
+    setEngineDigitStrategy(intervalStrategy);
+
+    const baselineTick = currentTickRef.current;
+    const afterEpoch = baselineTick?.symbol === symbol ? baselineTick.epoch : 0;
+    await new Promise<void>((resolve) => {
+      const waiter: EntrySignalWaiter = {
+        symbol,
+        entryDigit: strategy.entryDigit,
+        afterEpoch,
+        resolve,
+        signal,
+        abort: () => {
+          if (entrySignalWaiterRef.current === waiter) {
+            entrySignalWaiterRef.current = null;
+          }
+          resolve();
+        },
+      };
+      entrySignalWaiterRef.current = waiter;
+      signal.addEventListener('abort', waiter.abort, { once: true });
+    });
+  }, []);
 
   const buyContract = useCallback(async () => {
     if (proposal) {
@@ -207,17 +318,92 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     }
   }, [proposal, buyWithProposal]);
 
+  const engineMarketSymbols = useMemo(
+    () => getEngineMarketSymbols(symbols, engineMarketScope),
+    [symbols, engineMarketScope]
+  );
+  const engineMarketReady =
+    engineMarketScope === 'selected' ||
+    engineMarketSymbols.some(
+      (symbol) => symbol.underlying_symbol === activeSymbol?.underlying_symbol
+    );
+  const setEngineMarketScope = useCallback(
+    (scope: EngineMarketScope) => {
+      if (engineRunningRef.current) return;
+      engineMarketScopeRef.current = scope;
+      if (scope === 'selected') {
+        expectedEngineSymbolRef.current = activeSymbolRef.current?.underlying_symbol ?? null;
+      } else {
+        const eligibleSymbols = getEngineMarketSymbols(symbols, scope);
+        expectedEngineSymbolRef.current = eligibleSymbols.some(
+          (symbol) => symbol.underlying_symbol === activeSymbolRef.current?.underlying_symbol
+        )
+          ? activeSymbolRef.current?.underlying_symbol ?? null
+          : eligibleSymbols[0]?.underlying_symbol ?? null;
+      }
+      setEngineMarketScopeState(scope);
+    },
+    [symbols]
+  );
+  const selectNextEngineMarket = useCallback(() => {
+    if (engineMarketScope === 'selected' || engineMarketSymbols.length === 0) return;
+    const currentIndex = engineMarketSymbols.findIndex(
+      (symbol) => symbol.underlying_symbol === activeSymbol?.underlying_symbol
+    );
+    if (currentIndex === -1) return;
+    const nextIndex = (currentIndex + 1) % engineMarketSymbols.length;
+    expectedEngineSymbolRef.current = engineMarketSymbols[nextIndex].underlying_symbol;
+    selectSymbol(engineMarketSymbols[nextIndex].underlying_symbol);
+  }, [activeSymbol, engineMarketScope, engineMarketSymbols, selectSymbol]);
+  const isEngineProposalReady = useCallback(() => {
+    const expectedSymbol = expectedEngineSymbolRef.current;
+    const currentSymbol = activeSymbolRef.current?.underlying_symbol;
+    const proposalSymbol = proposalRef.current?.symbol;
+    return (
+      currentSymbol !== undefined &&
+      proposalSymbol === currentSymbol &&
+      engineDigitStrategy?.symbol === currentSymbol &&
+      proposalRef.current?.contractType === engineDigitStrategy?.contractMode &&
+      proposalRef.current?.barrier === engineDigitStrategy?.barrier &&
+      (engineMarketScopeRef.current === 'selected' || expectedSymbol === currentSymbol)
+    );
+  }, [engineDigitStrategy]);
+
   const shouldWaitForMartingaleSettlement =
     martingaleMultiplier.trim() !== '' && Number(martingaleMultiplier) > 1;
   const engine = useTradeEngine({
     canTrade:
       isAuthenticated &&
       isConnected &&
+      engineMarketReady &&
       !!proposal &&
       !isBuying &&
       (!shouldWaitForMartingaleSettlement || !hasPendingEngineTrade),
+    isTradeReady: isEngineProposalReady,
+    prepareTrade: prepareEngineTrade,
     placeTrade: buyContract,
+    onTradeComplete: selectNextEngineMarket,
   });
+
+  useEffect(() => {
+    if (
+      engine.isEngineRunning ||
+      engineMarketScope === 'selected' ||
+      engineMarketSymbols.length === 0 ||
+      engineMarketReady
+    ) {
+      return;
+    }
+    selectSymbol(engineMarketSymbols[0].underlying_symbol);
+    expectedEngineSymbolRef.current = engineMarketSymbols[0].underlying_symbol;
+  }, [
+    activeSymbol,
+    engine.isEngineRunning,
+    engineMarketReady,
+    engineMarketScope,
+    engineMarketSymbols,
+    selectSymbol,
+  ]);
   const processEngineTradeOutcome = useCallback(
     (contractId: number, profit: number) => {
       const tradeStake = pendingEngineContractsRef.current.get(contractId);
@@ -258,6 +444,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     engineRunningRef.current = engine.isEngineRunning;
     if (engine.isEngineRunning) return;
 
+    setEngineDigitStrategy(null);
     pendingEngineContractsRef.current.clear();
     earlyClosedContractsRef.current.clear();
     processedEngineContractsRef.current.clear();
@@ -315,6 +502,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   }, [buyResult, processEngineTradeOutcome]);
 
   const startEngine = useCallback(() => {
+    if (!engineMarketReady || digitStats.totalTicks === 0) return;
     const multiplier = martingaleMultiplier.trim()
       ? Number(martingaleMultiplier)
       : 1;
@@ -333,10 +521,18 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     processedEngineContractsRef.current.clear();
     setHasPendingEngineTrade(false);
     updateEngineStake(baseStake);
+    setEngineDigitStrategy(null);
     engine.startEngine();
-  }, [engine.startEngine, martingaleMultiplier, updateEngineStake]);
+  }, [
+    engine.startEngine,
+    engineMarketReady,
+    digitStats.totalTicks,
+    martingaleMultiplier,
+    updateEngineStake,
+  ]);
 
   const stopEngine = useCallback(() => {
+    setEngineDigitStrategy(null);
     engine.stopEngine();
   }, [engine.stopEngine]);
 
@@ -407,6 +603,9 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     isBuying,
     ...engine,
     engineError: engine.engineError,
+    engineMarketScope,
+    setEngineMarketScope,
+    canEngineMarketTrade: engineMarketReady && digitStats.totalTicks > 0,
     startEngine,
     stopEngine,
     buyResult,

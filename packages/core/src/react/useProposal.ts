@@ -56,6 +56,9 @@ export function useProposal(
         setProposal({
           id: resp.proposal.id,
           amount: params.amount,
+          symbol: params.symbol,
+          contractType: params.contractType,
+          barrier: params.barrier,
           askPrice: resp.proposal.ask_price,
           payout: resp.proposal.payout,
           longcode: resp.proposal.longcode,

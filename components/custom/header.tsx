@@ -23,7 +23,7 @@ interface HeaderProps {
   onApiTokenLogin?: (token: string) => Promise<void>;
   onLogout: () => void;
   onSwitchAccount: (accountId: string) => Promise<void>;
-  /** When provided, a Sign up button is rendered to the right of the Log in button. */
+  /** When provided, a Sign up button is rendered for unauthenticated users. */
   onSignUp?: () => Promise<void>;
   /** Logo source URL or data URL. When omitted, a placeholder badge is shown until
    *  the user provides a logo via the app builder (passed as a data URL via PREVIEW_BRANDING). */
@@ -78,13 +78,11 @@ function resolveShowAppName(showAppName?: boolean): boolean {
 function AuthButtons({
   isAuthenticated,
   isAuthenticating,
-  onLogin,
   onLogout,
   onSignUp,
 }: {
   isAuthenticated: boolean;
   isAuthenticating: boolean;
-  onLogin: () => Promise<void>;
   onLogout: () => void;
   onSignUp?: () => Promise<void>;
 }) {
@@ -96,22 +94,13 @@ function AuthButtons({
     );
   }
 
-  return (
+  return onSignUp ? (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={onLogin} disabled={isAuthenticating}>
-        {isAuthenticating ? (
-          <Localize i18n_default_text="Logging in..." />
-        ) : (
-          <Localize i18n_default_text="Log in" />
-        )}
+      <Button size="sm" onClick={onSignUp} disabled={isAuthenticating}>
+        <Localize i18n_default_text="Sign up" />
       </Button>
-      {onSignUp && (
-        <Button size="sm" onClick={onSignUp} disabled={isAuthenticating}>
-          <Localize i18n_default_text="Sign up" />
-        </Button>
-      )}
     </div>
-  );
+  ) : null;
 }
 
 function preventDismissFromPopoverOrHeader(event: {
@@ -167,7 +156,6 @@ export function Header({
   authState,
   accounts,
   activeAccount,
-  onLogin,
   onApiTokenLogin,
   onLogout,
   onSwitchAccount,
@@ -301,7 +289,6 @@ export function Header({
           <AuthButtons
             isAuthenticated={isAuthenticated}
             isAuthenticating={isAuthenticating}
-            onLogin={onLogin}
             onLogout={onLogout}
             onSignUp={onSignUp}
           />
@@ -321,22 +308,6 @@ export function Header({
                 <KeyRound className="h-4 w-4" />
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-3"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                void onLogin();
-              }}
-              disabled={isAuthenticating}
-            >
-              {isAuthenticating ? (
-                <Localize i18n_default_text="Logging in..." />
-              ) : (
-                <Localize i18n_default_text="Log in" />
-              )}
-            </Button>
             {onSignUp && (
               <Button
                 size="sm"

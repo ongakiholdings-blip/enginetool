@@ -106,9 +106,12 @@ export function LiveDigits({
       elapsedSeconds={trading.elapsedSeconds}
       secondsUntilNextTrade={trading.secondsUntilNextTrade}
       engineError={trading.engineError}
+      engineMarketScope={trading.engineMarketScope}
+      setEngineMarketScope={trading.setEngineMarketScope}
       canEngineTrade={
         authState === 'authenticated' &&
         isConnected &&
+        trading.canEngineMarketTrade &&
         !!trading.proposal &&
         !trading.isBuying
       }

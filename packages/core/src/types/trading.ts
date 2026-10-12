@@ -81,6 +81,9 @@ export interface ProposalResponse {
 export interface ProposalInfo {
   id: string;
   amount: number;
+  symbol?: string;
+  contractType?: string;
+  barrier?: number;
   askPrice: number;
   payout: number;
   longcode: string;

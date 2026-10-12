@@ -14,6 +14,7 @@ import type {
   EngineDurationUnit,
   TradeIntervalMinutes,
 } from '@/hooks/use-trade-engine';
+import type { EngineMarketScope } from '@/lib/engine-market-scope';
 import type {
   ContractMode,
   DurationLimits,
@@ -48,6 +49,8 @@ interface TradeControlsProps {
   elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
+  engineMarketScope: EngineMarketScope;
+  setEngineMarketScope: (scope: EngineMarketScope) => void;
   canTrade: boolean;
   buyResult: BuyResult | null;
   buyError: string | null;
@@ -114,6 +117,8 @@ export function TradeControls({
   elapsedSeconds,
   secondsUntilNextTrade,
   engineError,
+  engineMarketScope,
+  setEngineMarketScope,
   canTrade,
   buyResult,
   buyError,
@@ -279,6 +284,8 @@ export function TradeControls({
         secondsUntilNextTrade={secondsUntilNextTrade}
         canTrade={canTrade}
         engineError={engineError}
+        marketScope={engineMarketScope}
+        setMarketScope={setEngineMarketScope}
       />
 
       <p className="text-center text-xs text-muted-foreground">

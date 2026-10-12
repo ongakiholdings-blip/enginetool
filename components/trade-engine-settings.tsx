@@ -14,6 +14,8 @@ import type {
   EngineDurationUnit,
   TradeIntervalMinutes,
 } from '@/hooks/use-trade-engine';
+import { ENGINE_MARKET_SCOPES } from '@/lib/engine-market-scope';
+import type { EngineMarketScope } from '@/lib/engine-market-scope';
 
 interface TradeEngineSettingsProps {
   isRunning: boolean;
@@ -28,6 +30,8 @@ interface TradeEngineSettingsProps {
   secondsUntilNextTrade: number | null;
   canTrade: boolean;
   engineError: string | null;
+  marketScope: EngineMarketScope;
+  setMarketScope: (scope: EngineMarketScope) => void;
 }
 
 const INTERVALS: { minutes: TradeIntervalMinutes; label: string }[] = [
@@ -70,6 +74,8 @@ export function TradeEngineSettings({
   secondsUntilNextTrade,
   canTrade,
   engineError,
+  marketScope,
+  setMarketScope,
 }: TradeEngineSettingsProps) {
   const { localize } = useAppTranslations();
   const status = engineError
@@ -88,6 +94,38 @@ export function TradeEngineSettings({
 
   return (
     <div className="space-y-3 rounded-xl border border-border/80 bg-muted/30 p-3">
+      <div className="space-y-2">
+        <label
+          htmlFor="engine-market-scope"
+          className="text-xs font-medium text-muted-foreground"
+        >
+          <Localize i18n_default_text="Markets to trade" />
+        </label>
+        <Select
+          value={marketScope}
+          onValueChange={(value) => {
+            const scope = ENGINE_MARKET_SCOPES.find((option) => option.value === value);
+            if (scope) setMarketScope(scope.value);
+          }}
+          disabled={isRunning}
+        >
+          <SelectTrigger id="engine-market-scope" className="h-10">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {ENGINE_MARKET_SCOPES.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                <Localize i18n_default_text={option.label} />
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {marketScope !== 'selected' && (
+          <p className="text-xs text-muted-foreground">
+            <Localize i18n_default_text="Takes one trade per interval. After each trade, switches to the next open market for the next trade." />
+          </p>
+        )}
+      </div>
       <div className="space-y-2">
         <label
           htmlFor="trade-interval"
@@ -115,6 +153,9 @@ export function TradeEngineSettings({
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground">
+          <Localize i18n_default_text="Different tones signal when an interval starts and when its timer ends." />
+        </p>
       </div>
       <div className="space-y-2">
         <label

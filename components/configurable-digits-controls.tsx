@@ -51,6 +51,7 @@ import type {
   EngineDurationUnit,
   TradeIntervalMinutes,
 } from '@/hooks/use-trade-engine';
+import type { EngineMarketScope } from '@/lib/engine-market-scope';
 
 /** Human labels shown on each draggable block in rearrange mode. */
 function getBlockLabels(localize: (text: string) => string): Record<ControlKey, string> {
@@ -115,6 +116,8 @@ export interface ConfigurableBuyButtonProps {
   elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
+  engineMarketScope: EngineMarketScope;
+  setEngineMarketScope: (scope: EngineMarketScope) => void;
   canTrade: boolean;
   showSettings?: boolean;
 }
@@ -136,6 +139,8 @@ export function ConfigurableBuyButton({
   secondsUntilNextTrade,
   canTrade,
   engineError,
+  engineMarketScope,
+  setEngineMarketScope,
   showSettings = true,
 }: ConfigurableBuyButtonProps) {
   const { localize } = useAppTranslations();
@@ -210,6 +215,8 @@ export function ConfigurableBuyButton({
             secondsUntilNextTrade={secondsUntilNextTrade}
             canTrade={canTrade}
             engineError={engineError}
+            marketScope={engineMarketScope}
+            setMarketScope={setEngineMarketScope}
           />
           <p className="text-center text-xs text-muted-foreground">
             <Localize i18n_default_text="Starts immediately, then repeats at the selected interval." />
@@ -263,6 +270,8 @@ export interface ConfigurableDigitsControlsProps {
   elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
+  engineMarketScope: EngineMarketScope;
+  setEngineMarketScope: (scope: EngineMarketScope) => void;
   canTrade: boolean;
   isConnected: boolean;
   isAuthenticated?: boolean;
@@ -334,6 +343,8 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     elapsedSeconds,
     secondsUntilNextTrade,
     engineError,
+    engineMarketScope,
+    setEngineMarketScope,
     canTrade,
     isConnected,
     isAuthenticated,
@@ -813,6 +824,8 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
         secondsUntilNextTrade={secondsUntilNextTrade}
         canTrade={canTrade}
         engineError={engineError}
+        engineMarketScope={engineMarketScope}
+        setEngineMarketScope={setEngineMarketScope}
       />
     );
 

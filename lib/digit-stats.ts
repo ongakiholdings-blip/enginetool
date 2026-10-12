@@ -1,4 +1,4 @@
-import type { DigitStats } from './types';
+import type { ContractMode, DigitStats } from './types';
 
 /**
  * Derive the number of decimal places from a pip value.
@@ -40,6 +40,36 @@ export function computeDigitStats(prices: number[], pipSize: number): DigitStats
   );
 
   return { counts, percentages, totalTicks };
+}
+
+export interface DigitEntryStrategy {
+  entryDigit: number;
+  barrier: number;
+}
+
+export function getDigitEntryStrategy(
+  counts: number[],
+  contractMode: ContractMode
+): DigitEntryStrategy {
+  if (counts.length !== 10 || counts.some((count) => !Number.isFinite(count) || count < 0)) {
+    throw new Error('Digit statistics are unavailable for this market');
+  }
+  if (counts.reduce((total, count) => total + count, 0) === 0) {
+    throw new Error('Digit statistics are unavailable for this market');
+  }
+
+  const rankedDigits = counts
+    .map((count, digit) => ({ digit, count }))
+    .sort((left, right) => right.count - left.count || left.digit - right.digit)
+    .map(({ digit }) => digit);
+
+  if (contractMode === 'DIGITOVER') {
+    return { entryDigit: rankedDigits[1], barrier: 1 };
+  }
+  if (contractMode === 'DIGITUNDER') {
+    return { entryDigit: rankedDigits[0], barrier: 8 };
+  }
+  return { entryDigit: rankedDigits[0], barrier: rankedDigits[rankedDigits.length - 1] };
 }
 
 /**

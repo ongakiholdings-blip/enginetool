@@ -25,6 +25,7 @@ import type {
   EngineDurationUnit,
   TradeIntervalMinutes,
 } from '@/hooks/use-trade-engine';
+import type { EngineMarketScope } from '@/lib/engine-market-scope';
 import type {
   AuthState,
   DerivAccount,
@@ -112,6 +113,8 @@ export interface DigitsViewProps {
   elapsedSeconds: number;
   secondsUntilNextTrade: number | null;
   engineError: string | null;
+  engineMarketScope: EngineMarketScope;
+  setEngineMarketScope: (scope: EngineMarketScope) => void;
   canEngineTrade: boolean;
   startEngine: () => void;
   stopEngine: () => void;
@@ -192,6 +195,8 @@ export function DigitsView({
   elapsedSeconds,
   secondsUntilNextTrade,
   engineError,
+  engineMarketScope,
+  setEngineMarketScope,
   canEngineTrade,
   startEngine,
   stopEngine,
@@ -327,6 +332,8 @@ export function DigitsView({
     }, 0);
     return openProfit + closedProfit;
   }, [displayedOpenPositions, sessionClosedLedger]);
+  const sessionTransactionCount =
+    displayedOpenPositions.length + sessionClosedLedger.length;
   const transactionCurrency =
     activeAccount?.currency ?? displayedOpenPositions[0]?.currency ?? '';
   const resetClosedHistory = useCallback(() => {
@@ -489,6 +496,8 @@ export function DigitsView({
         elapsedSeconds={elapsedSeconds}
         secondsUntilNextTrade={secondsUntilNextTrade}
         engineError={engineError}
+        engineMarketScope={engineMarketScope}
+        setEngineMarketScope={setEngineMarketScope}
         canTrade={canEngineTrade}
         isConnected={isConnected}
         isAuthenticated={authState === 'authenticated'}
@@ -533,7 +542,7 @@ export function DigitsView({
                 <Localize i18n_default_text="Total profit/loss:" />
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <p
                 className={`text-2xl font-bold tabular-nums ${
                   sessionProfitLoss > 0
@@ -548,6 +557,14 @@ export function DigitsView({
                 {sessionProfitLoss.toFixed(2)}
                 {transactionCurrency ? ` ${transactionCurrency}` : ''}
               </p>
+              <div className="flex items-center justify-between border-t border-border pt-3">
+                <span className="text-sm text-muted-foreground">
+                  <Localize i18n_default_text="Transactions" />
+                </span>
+                <span className="text-lg font-semibold tabular-nums" aria-live="polite">
+                  {sessionTransactionCount}
+                </span>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -595,6 +612,8 @@ export function DigitsView({
                     secondsUntilNextTrade={secondsUntilNextTrade}
                     canTrade={canEngineTrade}
                     engineError={engineError}
+                    marketScope={engineMarketScope}
+                    setMarketScope={setEngineMarketScope}
                   />
                   <p className="text-center text-xs text-muted-foreground">
                     <Localize i18n_default_text="Starts immediately, then repeats at the selected interval." />
@@ -722,6 +741,8 @@ export function DigitsView({
                         elapsedSeconds={elapsedSeconds}
                         secondsUntilNextTrade={secondsUntilNextTrade}
                         engineError={engineError}
+                        engineMarketScope={engineMarketScope}
+                        setEngineMarketScope={setEngineMarketScope}
                         canTrade={canEngineTrade}
                         buyResult={buyResult}
                         buyError={buyError}
@@ -803,6 +824,8 @@ export function DigitsView({
                     elapsedSeconds={elapsedSeconds}
                     secondsUntilNextTrade={secondsUntilNextTrade}
                     engineError={engineError}
+                    engineMarketScope={engineMarketScope}
+                    setEngineMarketScope={setEngineMarketScope}
                     canTrade={canEngineTrade}
                     buyResult={buyResult}
                     buyError={buyError}
@@ -841,6 +864,8 @@ export function DigitsView({
             elapsedSeconds={elapsedSeconds}
             secondsUntilNextTrade={secondsUntilNextTrade}
             engineError={engineError}
+            engineMarketScope={engineMarketScope}
+            setEngineMarketScope={setEngineMarketScope}
             canTrade={canEngineTrade}
             showSettings={!!editMode}
           />
