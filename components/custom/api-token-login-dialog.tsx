@@ -60,7 +60,7 @@ export function ApiTokenLoginDialog({
             <Localize i18n_default_text="Log in with API token" />
           </DialogTitle>
           <DialogDescription>
-            <Localize i18n_default_text="Enter a Deriv API token with trade permission. Your token is kept only for this browser session." />
+            <Localize i18n_default_text="Enter a Deriv Personal Access Token (PAT) with trade permission. Legacy API tokens are not supported here. Your PAT stays in this browser session." />
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -97,7 +97,7 @@ export function ApiTokenLoginDialog({
           </div>
           {error && (
             <p role="alert" className="text-sm text-destructive">
-              {error}
+              {localize(error)}
             </p>
           )}
           <Button type="submit" className="w-full" disabled={isSubmitting || !token.trim()}>

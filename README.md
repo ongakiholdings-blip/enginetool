@@ -65,7 +65,7 @@ npm run dev
 
 The app is available at `http://localhost:3000`.
 
-You can authenticate with Deriv OAuth or choose **API token** in the header. API-token login requires a token with the `trade` permission. The token is sent directly to Deriv's REST API as a bearer token to retrieve accounts and an authenticated WebSocket URL; it is kept in session storage only for the current browser session.
+You can authenticate with Deriv OAuth or choose **API token** in the header. API-token login requires a Deriv **Personal Access Token (PAT)** with the `trade` permission. Legacy API tokens are not supported by this REST-based login flow. The PAT is sent directly to Deriv's REST API as a bearer token to retrieve accounts and an authenticated WebSocket URL; it is kept in session storage only for the current browser session.
 
 ## Automated Trading Engine
 

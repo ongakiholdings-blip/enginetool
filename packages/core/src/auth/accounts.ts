@@ -7,6 +7,20 @@ import {
 } from './storage';
 import { getApiBaseUrl } from '../config/urls';
 
+function getAccountsRequestError(status: number, action: string): Error {
+  if (status === 401) {
+    return new Error(
+      'Deriv rejected the token (401). Enter a Personal Access Token (PAT) with trade permission and confirm it has not been revoked.'
+    );
+  }
+  if (status === 403) {
+    return new Error(
+      'The token was rejected (403). Confirm it has trade permission and that the Deriv App ID is correct.'
+    );
+  }
+  return new Error(`${action} (${status})`);
+}
+
 /**
  * Fetch the list of trading accounts for the authenticated user.
  */
@@ -22,7 +36,7 @@ export async function fetchAccounts(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch accounts (${response.status})`);
+    throw getAccountsRequestError(response.status, 'Failed to fetch accounts');
   }
 
   const data = await response.json();
@@ -56,7 +70,10 @@ export async function getWebSocketOTP(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to get WebSocket OTP (${response.status})`);
+    throw getAccountsRequestError(
+      response.status,
+      'Failed to get authenticated WebSocket connection'
+    );
   }
 
   const data: OTPResponse = await response.json();
