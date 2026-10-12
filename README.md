@@ -28,7 +28,7 @@ NEXT_PUBLIC_DERIV_APP_ID=34EC8wFqtCnCN09NJpMXv
 NEXT_PUBLIC_DERIV_REDIRECT_URI=https://frostydbot.site
 NEXT_PUBLIC_DERIV_APP_NAME=FROSTY-DBOT
 NEXT_PUBLIC_DERIV_SHOW_APP_NAME=true
-NEXT_PUBLIC_DERIV_REFERRAL_LINK=
+NEXT_PUBLIC_DERIV_REFERRAL_LINK=https://t.deriv.link?t=439FPLA37FCH
 NEXT_PUBLIC_DERIV_OAUTH_SCOPES=trade,account_manage
 NEXT_PUBLIC_DERIV_ENV=production
 ```
@@ -43,7 +43,7 @@ NEXT_PUBLIC_DERIV_ENV=production
 | `NEXT_PUBLIC_DERIV_OAUTH_SCOPES` | Comma-separated OAuth scopes (e.g. `trade,account_manage`) |
 | `NEXT_PUBLIC_DERIV_ENV` | `production` to connect to the live Deriv endpoint; `preview` for staging |
 
-For the Vercel **Production** environment, use the values shown above. Leave the optional referral link blank if you do not have one. Add the same `https://frostydbot.site` redirect URI to the Deriv application's allowed redirect URIs.
+For the Vercel **Production** environment, use the values shown above. Add the same `https://frostydbot.site` redirect URI to the Deriv application's allowed redirect URIs.
 
 For local development, copy `.env.example` to `.env.local` and fill in your values. Next.js loads `.env.local` automatically.
 
