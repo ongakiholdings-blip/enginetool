@@ -154,7 +154,7 @@ export function TradeEngineSettings({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          <Localize i18n_default_text="Different tones signal when an interval starts and when its timer ends." />
+          <Localize i18n_default_text="Different tones signal interval start and end. With at least 800 recent ticks, the engine tests the strategy on the newer half and skips the interval unless its 95% lower confidence bound beats the proposal's break-even rate by 2 percentage points." />
         </p>
       </div>
       <div className="space-y-2">

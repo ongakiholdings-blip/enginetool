@@ -55,7 +55,7 @@ export type EngineDurationUnit = 'minutes' | 'hours' | 'days';
 interface UseTradeEngineParams {
   canTrade: boolean;
   isTradeReady?: () => boolean;
-  prepareTrade?: (signal: AbortSignal) => Promise<void>;
+  prepareTrade?: (signal: AbortSignal) => Promise<boolean | void>;
   placeTrade: () => Promise<void>;
   onTradeComplete?: () => void;
 }
@@ -208,23 +208,25 @@ export function useTradeEngine({
     const controller = new AbortController();
     cycleAbortRef.current = controller;
     try {
-      await prepareTradeRef.current?.(controller.signal);
-      while (
-        runningRef.current &&
-        !controller.signal.aborted &&
-        (!canTradeRef.current ||
-          (isTradeReadyRef.current && !isTradeReadyRef.current()))
-      ) {
-        if (endsAtRef.current !== null && Date.now() >= endsAtRef.current) {
-          stopEngine();
-          return;
+      const shouldPlaceTrade = await prepareTradeRef.current?.(controller.signal);
+      if (shouldPlaceTrade !== false) {
+        while (
+          runningRef.current &&
+          !controller.signal.aborted &&
+          (!canTradeRef.current ||
+            (isTradeReadyRef.current && !isTradeReadyRef.current()))
+        ) {
+          if (endsAtRef.current !== null && Date.now() >= endsAtRef.current) {
+            stopEngine();
+            return;
+          }
+          await waitForDelayOrAbort(250, controller.signal);
         }
-        await waitForDelayOrAbort(250, controller.signal);
-      }
-      if (!runningRef.current || controller.signal.aborted) return;
-      await placeTradeRef.current();
-      if (runningRef.current) {
-        onTradeCompleteRef.current?.();
+        if (!runningRef.current || controller.signal.aborted) return;
+        await placeTradeRef.current();
+        if (runningRef.current) {
+          onTradeCompleteRef.current?.();
+        }
       }
     } catch (error) {
       if (controller.signal.aborted) return;

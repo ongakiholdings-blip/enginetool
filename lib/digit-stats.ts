@@ -43,7 +43,6 @@ export function computeDigitStats(prices: number[], pipSize: number): DigitStats
 }
 
 export interface DigitEntryStrategy {
-  entryDigit: number;
   barrier: number;
 }
 
@@ -64,12 +63,63 @@ export function getDigitEntryStrategy(
     .map(({ digit }) => digit);
 
   if (contractMode === 'DIGITOVER') {
-    return { entryDigit: rankedDigits[1], barrier: 1 };
+    return { barrier: 1 };
   }
   if (contractMode === 'DIGITUNDER') {
-    return { entryDigit: rankedDigits[0], barrier: 8 };
+    return { barrier: 8 };
   }
-  return { entryDigit: rankedDigits[0], barrier: rankedDigits[rankedDigits.length - 1] };
+  return { barrier: rankedDigits[rankedDigits.length - 1] };
+}
+
+export function hasConservativeExpectedValue(
+  validationCounts: number[],
+  contractMode: ContractMode,
+  barrier: number,
+  askPrice: number,
+  payout: number
+): boolean {
+  if (
+    validationCounts.length !== 10 ||
+    validationCounts.some((count) => !Number.isFinite(count) || count < 0) ||
+    !Number.isInteger(barrier) ||
+    barrier < 0 ||
+    barrier > 9 ||
+    !Number.isFinite(askPrice) ||
+    !Number.isFinite(payout) ||
+    askPrice <= 0 ||
+    payout <= askPrice
+  ) {
+    return false;
+  }
+
+  const sampleSize = validationCounts.reduce((total, count) => total + count, 0);
+  if (sampleSize < 400) return false;
+
+  let wins = 0;
+  if (contractMode === 'DIGITOVER') {
+    wins = validationCounts.slice(2).reduce((total, count) => total + count, 0);
+  } else if (contractMode === 'DIGITUNDER') {
+    wins = validationCounts.slice(0, 8).reduce((total, count) => total + count, 0);
+  } else {
+    wins = sampleSize - validationCounts[barrier];
+  }
+
+  const z = 1.96;
+  const observedRate = wins / sampleSize;
+  const zSquared = z * z;
+  const denominator = 1 + zSquared / sampleSize;
+  const lowerBound =
+    (observedRate +
+      zSquared / (2 * sampleSize) -
+      z *
+        Math.sqrt(
+          (observedRate * (1 - observedRate)) / sampleSize +
+            zSquared / (4 * sampleSize * sampleSize)
+        )) /
+    denominator;
+  const breakEvenRate = askPrice / payout;
+
+  return lowerBound > breakEvenRate + 0.02;
 }
 
 /**
