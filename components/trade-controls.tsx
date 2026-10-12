@@ -28,6 +28,9 @@ interface TradeControlsProps {
   isConnected: boolean;
   stake: string;
   onStakeChange: (value: string) => void;
+  martingaleMultiplier: string;
+  onMartingaleMultiplierChange: (value: string) => void;
+  martingaleError: string | null;
   duration: string;
   onDurationChange: (value: string) => void;
   durationLimits: DurationLimits;
@@ -91,6 +94,9 @@ export function TradeControls({
   isConnected,
   stake,
   onStakeChange,
+  martingaleMultiplier,
+  onMartingaleMultiplierChange,
+  martingaleError,
   duration,
   onDurationChange,
   durationLimits,
@@ -166,22 +172,48 @@ export function TradeControls({
       </ToggleGroup>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="stake" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Stake" />
-          </Label>
-          <Input
-            id="stake"
-            type="number"
-            value={stake}
-            onChange={e => onStakeChange(e.target.value)}
-            onKeyDown={e => {
-              if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
-            }}
-            min={0}
-            step="0.01"
-            labelRight="USD"
-          />
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="stake" className="text-xs text-muted-foreground">
+              <Localize i18n_default_text="Stake" />
+            </Label>
+            <Input
+              id="stake"
+              type="number"
+              value={stake}
+              onChange={e => onStakeChange(e.target.value)}
+              onKeyDown={e => {
+                if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+              }}
+              min={0}
+              step="0.01"
+              labelRight="USD"
+              disabled={isEngineRunning}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="martingale-multiplier" className="text-xs text-muted-foreground">
+              <Localize i18n_default_text="Martingale" />
+            </Label>
+            <Input
+              id="martingale-multiplier"
+              type="number"
+              min={1}
+              step="0.1"
+              value={martingaleMultiplier}
+              onChange={e => onMartingaleMultiplierChange(e.target.value)}
+              labelRight="x"
+              disabled={isEngineRunning}
+            />
+            <p className="text-[11px] leading-snug text-muted-foreground">
+              <Localize i18n_default_text="Next stake is multiplied by this value after each loss and resets to your base stake after a win. Leave blank to disable." />
+            </p>
+            {martingaleError && (
+              <p role="alert" className="text-xs text-destructive">
+                {localize(martingaleError)}
+              </p>
+            )}
+          </div>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="duration" className="text-xs text-muted-foreground">

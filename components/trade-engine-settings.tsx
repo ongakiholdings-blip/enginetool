@@ -31,6 +31,7 @@ interface TradeEngineSettingsProps {
 }
 
 const INTERVALS: { minutes: TradeIntervalMinutes; label: string }[] = [
+  { minutes: 0.5, label: '30 seconds' },
   { minutes: 1, label: '1 minute' },
   { minutes: 5, label: '5 minutes' },
   { minutes: 10, label: '10 minutes' },

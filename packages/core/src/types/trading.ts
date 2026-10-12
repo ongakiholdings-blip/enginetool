@@ -80,6 +80,7 @@ export interface ProposalResponse {
 
 export interface ProposalInfo {
   id: string;
+  amount: number;
   askPrice: number;
   payout: number;
   longcode: string;

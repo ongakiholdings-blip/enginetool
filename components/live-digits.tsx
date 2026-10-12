@@ -87,6 +87,9 @@ export function LiveDigits({
       setSelectedDigit={trading.setSelectedDigit}
       stake={trading.stake}
       setStake={trading.setStake}
+      martingaleMultiplier={trading.martingaleMultiplier}
+      setMartingaleMultiplier={trading.setMartingaleMultiplier}
+      martingaleError={trading.martingaleError}
       duration={trading.duration}
       setDuration={trading.setDuration}
       durationLimits={trading.durationLimits}

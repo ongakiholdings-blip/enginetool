@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const TRADE_INTERVAL_OPTIONS = [1, 5, 10] as const;
+const TRADE_INTERVAL_OPTIONS = [0.5, 1, 5, 10] as const;
 const MAX_TIMEOUT_MS = 2_147_000_000;
 
 export type TradeIntervalMinutes = (typeof TRADE_INTERVAL_OPTIONS)[number];

@@ -21,7 +21,10 @@ import { TransactionsPanel } from '@/components/custom/transactions-panel';
 import { ThemeToggle } from '@/components/custom/theme-toggle';
 import { PositionsTable } from '@/components/custom/positions-table';
 import { TradeEngineSettings } from './trade-engine-settings';
-import type { EngineDurationUnit } from '@/hooks/use-trade-engine';
+import type {
+  EngineDurationUnit,
+  TradeIntervalMinutes,
+} from '@/hooks/use-trade-engine';
 import type {
   AuthState,
   DerivAccount,
@@ -90,6 +93,9 @@ export interface DigitsViewProps {
   setSelectedDigit: (digit: number) => void;
   stake: string;
   setStake: (value: string) => void;
+  martingaleMultiplier: string;
+  setMartingaleMultiplier: (value: string) => void;
+  martingaleError: string | null;
   duration: string;
   setDuration: (value: string) => void;
   durationLimits: DurationLimits;
@@ -97,8 +103,8 @@ export interface DigitsViewProps {
   isProposalLoading: boolean;
   isBuying: boolean;
   isEngineRunning: boolean;
-  intervalMinutes: 1 | 5 | 10;
-  setIntervalMinutes: (minutes: 1 | 5 | 10) => void;
+  intervalMinutes: TradeIntervalMinutes;
+  setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
   activeDuration: string;
   setActiveDuration: (duration: string) => void;
   activeDurationUnit: EngineDurationUnit;
@@ -167,6 +173,9 @@ export function DigitsView({
   setSelectedDigit,
   stake,
   setStake,
+  martingaleMultiplier,
+  setMartingaleMultiplier,
+  martingaleError,
   duration,
   setDuration,
   durationLimits,
@@ -459,6 +468,9 @@ export function DigitsView({
         onDigitSelect={setSelectedDigit}
         stake={stake}
         onStakeChange={setStake}
+        martingaleMultiplier={martingaleMultiplier}
+        onMartingaleMultiplierChange={setMartingaleMultiplier}
+        martingaleError={martingaleError}
         duration={duration}
         onDurationChange={setDuration}
         durationLimits={durationLimits}
@@ -689,6 +701,9 @@ export function DigitsView({
                         isConnected={isConnected}
                         stake={stake}
                         onStakeChange={setStake}
+                        martingaleMultiplier={martingaleMultiplier}
+                        onMartingaleMultiplierChange={setMartingaleMultiplier}
+                        martingaleError={martingaleError}
                         duration={duration}
                         onDurationChange={setDuration}
                         durationLimits={durationLimits}
@@ -767,6 +782,9 @@ export function DigitsView({
                     isConnected={isConnected}
                     stake={stake}
                     onStakeChange={setStake}
+                    martingaleMultiplier={martingaleMultiplier}
+                    onMartingaleMultiplierChange={setMartingaleMultiplier}
+                    martingaleError={martingaleError}
                     duration={duration}
                     onDurationChange={setDuration}
                     durationLimits={durationLimits}

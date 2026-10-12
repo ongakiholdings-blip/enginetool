@@ -55,6 +55,7 @@ export function useProposal(
       if (resp.proposal) {
         setProposal({
           id: resp.proposal.id,
+          amount: params.amount,
           askPrice: resp.proposal.ask_price,
           payout: resp.proposal.payout,
           longcode: resp.proposal.longcode,

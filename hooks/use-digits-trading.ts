@@ -17,7 +17,7 @@ import { useBaseTrading } from '@/hooks/use-base-trading';
 import type { UseBaseTradingParams } from '@/hooks/use-base-trading';
 import { computeDigitStats, getLastDigit } from '../lib/digit-stats';
 import { useTradeEngine } from './use-trade-engine';
-import type { EngineDurationUnit } from './use-trade-engine';
+import type { EngineDurationUnit, TradeIntervalMinutes } from './use-trade-engine';
 import type { ContractMode, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
 
 const CONTRACT_TYPES = ['DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
@@ -40,6 +40,9 @@ interface UseDigitsTradingReturn {
   pipSize: number;
   stake: string;
   setStake: (value: string) => void;
+  martingaleMultiplier: string;
+  setMartingaleMultiplier: (value: string) => void;
+  martingaleError: string | null;
   duration: string;
   setDuration: (value: string) => void;
   durationLimits: DurationLimits;
@@ -48,8 +51,8 @@ interface UseDigitsTradingReturn {
   isProposalLoading: boolean;
   isBuying: boolean;
   isEngineRunning: boolean;
-  intervalMinutes: 1 | 5 | 10;
-  setIntervalMinutes: (minutes: 1 | 5 | 10) => void;
+  intervalMinutes: TradeIntervalMinutes;
+  setIntervalMinutes: (minutes: TradeIntervalMinutes) => void;
   activeDuration: string;
   setActiveDuration: (duration: string) => void;
   activeDurationUnit: EngineDurationUnit;
@@ -102,7 +105,37 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   // Digits-specific trade state
   const [contractMode, setContractMode] = useState<ContractMode>('DIGITUNDER');
   const [selectedDigit, setSelectedDigit] = useState<number>(5);
-  const [stake, setStake] = useState<string>('0.73');
+  const [stake, setStakeState] = useState<string>('0.73');
+  const [engineStake, setEngineStake] = useState(0.73);
+  const [martingaleMultiplier, setMartingaleMultiplierState] = useState('2');
+  const [martingaleError, setMartingaleError] = useState<string | null>(null);
+  const [hasPendingEngineTrade, setHasPendingEngineTrade] = useState(false);
+  const engineStakeRef = useRef(0.73);
+  const sessionBaseStakeRef = useRef(0.73);
+  const engineRunningRef = useRef(false);
+  const pendingEngineContractsRef = useRef(new Map<number, number>());
+  const earlyClosedContractsRef = useRef(new Map<number, number>());
+  const processedEngineContractsRef = useRef(new Set<number>());
+  const stakeRef = useRef(stake);
+  stakeRef.current = stake;
+
+  const updateEngineStake = useCallback((value: number) => {
+    engineStakeRef.current = value;
+    setEngineStake(value);
+  }, []);
+
+  const setStake = useCallback((value: string) => {
+    stakeRef.current = value;
+    setStakeState(value);
+    if (!engineRunningRef.current) {
+      updateEngineStake(Number(value));
+    }
+  }, [updateEngineStake]);
+
+  const setMartingaleMultiplier = useCallback((value: string) => {
+    setMartingaleMultiplierState(value);
+    setMartingaleError(null);
+  }, []);
   const [duration, setDuration] = useState<string>('1');
 
   const digitStats: DigitStats = useMemo(
@@ -133,8 +166,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   // real params and useProposal re-subscribes to get a fresh proposal.
   const proposalParams: ProposalParams | null = useMemo(() => {
     if (isBuying || !activeSymbol) return null;
-    const stakeNum = parseFloat(stake);
-    if (!stakeNum || stakeNum <= 0) return null;
+    if (!Number.isFinite(engineStake) || engineStake <= 0) return null;
     const durationNum = Number(duration);
     if (
       !Number.isInteger(durationNum) ||
@@ -147,7 +179,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     return {
       contractType: contractMode,
       symbol: activeSymbol.underlying_symbol,
-      amount: stakeNum,
+      amount: engineStake,
       duration: durationNum,
       durationUnit: 't',
       basis: 'stake' as const,
@@ -159,9 +191,15 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
             ? 8
             : selectedDigit,
     };
-  }, [activeSymbol, contractMode, stake, duration, durationLimits, selectedDigit, isBuying]);
+  }, [activeSymbol, contractMode, engineStake, duration, durationLimits, selectedDigit, isBuying]);
 
-  const { proposal } = useProposal(tradingWs, tradingIsConnected, proposalParams);
+  const { proposal: receivedProposal } = useProposal(
+    tradingWs,
+    tradingIsConnected,
+    proposalParams
+  );
+  const proposal =
+    receivedProposal?.amount === engineStake ? receivedProposal : null;
 
   const buyContract = useCallback(async () => {
     if (proposal) {
@@ -169,10 +207,139 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     }
   }, [proposal, buyWithProposal]);
 
+  const shouldWaitForMartingaleSettlement =
+    martingaleMultiplier.trim() !== '' && Number(martingaleMultiplier) > 1;
   const engine = useTradeEngine({
-    canTrade: isAuthenticated && isConnected && !!proposal && !isBuying,
+    canTrade:
+      isAuthenticated &&
+      isConnected &&
+      !!proposal &&
+      !isBuying &&
+      (!shouldWaitForMartingaleSettlement || !hasPendingEngineTrade),
     placeTrade: buyContract,
   });
+  const processEngineTradeOutcome = useCallback(
+    (contractId: number, profit: number) => {
+      const tradeStake = pendingEngineContractsRef.current.get(contractId);
+      if (tradeStake === undefined || processedEngineContractsRef.current.has(contractId)) {
+        return;
+      }
+
+      processedEngineContractsRef.current.add(contractId);
+      if (processedEngineContractsRef.current.size > 500) {
+        const oldestContractId = processedEngineContractsRef.current.values().next().value;
+        if (oldestContractId !== undefined) {
+          processedEngineContractsRef.current.delete(oldestContractId);
+        }
+      }
+      pendingEngineContractsRef.current.delete(contractId);
+      earlyClosedContractsRef.current.delete(contractId);
+      setHasPendingEngineTrade(pendingEngineContractsRef.current.size > 0);
+
+      const multiplier = martingaleMultiplier.trim()
+        ? Number(martingaleMultiplier)
+        : 1;
+      const nextStake =
+        profit < 0
+          ? Math.round(tradeStake * multiplier * 100) / 100
+          : sessionBaseStakeRef.current;
+
+      if (!Number.isFinite(nextStake) || nextStake <= 0) {
+        setMartingaleError('Martingale stake is invalid; engine stopped');
+        engine.stopEngine();
+        return;
+      }
+      updateEngineStake(nextStake);
+    },
+    [engine.stopEngine, martingaleMultiplier, updateEngineStake]
+  );
+
+  useEffect(() => {
+    engineRunningRef.current = engine.isEngineRunning;
+    if (engine.isEngineRunning) return;
+
+    pendingEngineContractsRef.current.clear();
+    earlyClosedContractsRef.current.clear();
+    processedEngineContractsRef.current.clear();
+    setHasPendingEngineTrade(false);
+    updateEngineStake(Number(stakeRef.current));
+  }, [engine.isEngineRunning, updateEngineStake]);
+
+  useEffect(() => {
+    for (const position of openPositions) {
+      const isClosed =
+        !!position.is_sold || !!position.is_expired || position.status !== 'open';
+      if (!isClosed) continue;
+
+      const profitValue: unknown = position.profit;
+      if (
+        (typeof profitValue !== 'string' && typeof profitValue !== 'number') ||
+        (typeof profitValue === 'string' && profitValue.trim() === '')
+      ) {
+        continue;
+      }
+      const profit = Number(profitValue);
+      if (!Number.isFinite(profit)) continue;
+      if (
+        !processedEngineContractsRef.current.has(position.contract_id) &&
+        !pendingEngineContractsRef.current.has(position.contract_id)
+      ) {
+        earlyClosedContractsRef.current.set(position.contract_id, profit);
+        if (earlyClosedContractsRef.current.size > 100) {
+          const oldestContractId = earlyClosedContractsRef.current.keys().next().value;
+          if (oldestContractId !== undefined) {
+            earlyClosedContractsRef.current.delete(oldestContractId);
+          }
+        }
+      }
+      processEngineTradeOutcome(position.contract_id, profit);
+    }
+  }, [openPositions, processEngineTradeOutcome]);
+
+  useEffect(() => {
+    if (!buyResult || !engineRunningRef.current) return;
+    const contractId = buyResult.contractId;
+    if (
+      processedEngineContractsRef.current.has(contractId) ||
+      pendingEngineContractsRef.current.has(contractId)
+    ) {
+      return;
+    }
+
+    const closedProfit = earlyClosedContractsRef.current.get(contractId);
+    pendingEngineContractsRef.current.set(contractId, engineStakeRef.current);
+    setHasPendingEngineTrade(true);
+    if (closedProfit !== undefined) {
+      processEngineTradeOutcome(contractId, closedProfit);
+    }
+  }, [buyResult, processEngineTradeOutcome]);
+
+  const startEngine = useCallback(() => {
+    const multiplier = martingaleMultiplier.trim()
+      ? Number(martingaleMultiplier)
+      : 1;
+    if (!Number.isFinite(multiplier) || multiplier < 1) {
+      setMartingaleError('Martingale multiplier must be 1 or greater');
+      return;
+    }
+
+    const baseStake = Number(stakeRef.current);
+    if (!Number.isFinite(baseStake) || baseStake <= 0) return;
+
+    setMartingaleError(null);
+    sessionBaseStakeRef.current = baseStake;
+    pendingEngineContractsRef.current.clear();
+    earlyClosedContractsRef.current.clear();
+    processedEngineContractsRef.current.clear();
+    setHasPendingEngineTrade(false);
+    updateEngineStake(baseStake);
+    engine.startEngine();
+  }, [engine.startEngine, martingaleMultiplier, updateEngineStake]);
+
+  const stopEngine = useCallback(() => {
+    engine.stopEngine();
+  }, [engine.stopEngine]);
+
   const previousAccountId = useRef(accountId);
   const refreshedClosedContracts = useRef(new Set<number>());
   const closeRefreshTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -205,10 +372,10 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
       refreshedClosedContracts.current.clear();
       closeRefreshTimers.current.forEach(clearTimeout);
       closeRefreshTimers.current = [];
-      engine.stopEngine();
+      stopEngine();
     }
-    if (!isAuthenticated) engine.stopEngine();
-  }, [accountId, isAuthenticated, engine.stopEngine]);
+    if (!isAuthenticated) stopEngine();
+  }, [accountId, isAuthenticated, stopEngine]);
 
   return {
     isConnected,
@@ -228,6 +395,9 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     pipSize,
     stake,
     setStake,
+    martingaleMultiplier,
+    setMartingaleMultiplier,
+    martingaleError,
     duration,
     setDuration,
     durationLimits,
@@ -236,6 +406,9 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     isProposalLoading: isConnected && proposalParams !== null && proposal === null,
     isBuying,
     ...engine,
+    engineError: engine.engineError,
+    startEngine,
+    stopEngine,
     buyResult,
     buyError,
     clearBuyResult,
