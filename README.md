@@ -13,9 +13,9 @@ A self-hosted digit trading app built on the Deriv WebSocket API. Supports Match
 3. Set the **Redirect URI** to the URL where you will host this app (e.g. `http://localhost:3000` for local development).
 4. Copy the **App ID** shown after registration — you will need it in the next step.
 
-## Step 2: Configure `.env.production`
+## Step 2: Configure environment variables
 
-Copy `.env.example` to `.env.production` and fill in your values:
+For local production builds, copy `.env.example` to `.env.production` and fill in your values:
 
 ```bash
 cp .env.example .env.production
@@ -43,7 +43,16 @@ NEXT_PUBLIC_DERIV_ENV=production
 | `NEXT_PUBLIC_DERIV_OAUTH_SCOPES` | Comma-separated OAuth scopes (e.g. `trade,account_manage`) |
 | `NEXT_PUBLIC_DERIV_ENV` | `production` to connect to the live Deriv endpoint; `preview` for staging |
 
-For local development, copy `.env.production` to `.env.local` — Next.js will load `.env.local` automatically and it takes precedence over `.env.production`.
+For local development, copy `.env.example` to `.env.local` and fill in your values. Next.js loads `.env.local` automatically.
+
+### Deploy to Vercel
+
+1. Import this repository into Vercel. The included `vercel.json` identifies it as a Next.js project; keep the detected Next.js framework settings and do not set an output directory such as `out`.
+2. In the Vercel project, open **Settings → Environment Variables** and add the variables from `.env.example`. Set them for the environments where you intend to deploy. These are `NEXT_PUBLIC_` variables and are included in the browser bundle; never put Deriv API tokens or other secrets in them.
+3. Set `NEXT_PUBLIC_DERIV_REDIRECT_URI` to the exact production URL registered for your Deriv application (for example, `https://your-project.vercel.app`). Register that same URL in the Deriv App settings. If you use a custom domain, use that domain consistently in both places.
+4. Redeploy after changing environment variables; Next.js reads these public values during the build.
+
+Use `NEXT_PUBLIC_DERIV_ENV=production` for live Deriv services. Use `preview` only when intentionally connecting a deployment to Deriv's staging services.
 
 ## Step 3: Local Development
 
@@ -62,10 +71,10 @@ Choose **Over 1**, **Under 8**, or **Differs** and set the stake, Martingale mul
 
 The main screen shows the active and closed positions from the current engine session in a transaction history below the trading controls. Older account history is not included. **Reset history** clears the displayed session history without closing active contracts; new trades are shown after reset.
 
-## Step 4: Build for Production
+## Step 4: Verify a Production Build
 
 ```bash
 npm run build
 ```
 
-This produces a fully static export in the `/out` directory. Serve the contents of `/out` from any web server or static file host.
+Vercel runs this build automatically when deploying. This project uses the standard Next.js build output; it is not configured as a static export.
