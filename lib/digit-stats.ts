@@ -1,4 +1,4 @@
-import type { ContractMode, DigitStats } from './types';
+import type { DigitStats } from './types';
 
 /**
  * Derive the number of decimal places from a pip value.
@@ -23,30 +23,6 @@ export function getLastDigit(price: number, pipSize: number): number {
   return parseInt(lastChar, 10);
 }
 
-export function getTrendEntryDigit(prices: number[], pipSize: number): 5 | 6 | null {
-  const trendWindow = prices.slice(-20);
-  if (
-    trendWindow.length < 20 ||
-    trendWindow.some((price) => !Number.isFinite(price)) ||
-    !Number.isInteger(pipSize) ||
-    pipSize < 0
-  ) {
-    return null;
-  }
-
-  const midpoint = trendWindow.length / 2;
-  const firstAverage =
-    trendWindow.slice(0, midpoint).reduce((total, price) => total + price, 0) / midpoint;
-  const recentAverage =
-    trendWindow.slice(midpoint).reduce((total, price) => total + price, 0) / midpoint;
-  const minimumTrend = 10 ** -pipSize;
-  const difference = recentAverage - firstAverage;
-
-  if (difference >= minimumTrend) return 6;
-  if (difference <= -minimumTrend) return 5;
-  return null;
-}
-
 /**
  * Compute digit statistics (counts and percentages) from an array of prices.
  */
@@ -64,35 +40,6 @@ export function computeDigitStats(prices: number[], pipSize: number): DigitStats
   );
 
   return { counts, percentages, totalTicks };
-}
-
-export interface DigitEntryStrategy {
-  barrier: number;
-}
-
-export function getDigitEntryStrategy(
-  counts: number[],
-  contractMode: ContractMode
-): DigitEntryStrategy {
-  if (counts.length !== 10 || counts.some((count) => !Number.isFinite(count) || count < 0)) {
-    throw new Error('Digit statistics are unavailable for this market');
-  }
-  if (counts.reduce((total, count) => total + count, 0) === 0) {
-    throw new Error('Digit statistics are unavailable for this market');
-  }
-
-  const rankedDigits = counts
-    .map((count, digit) => ({ digit, count }))
-    .sort((left, right) => right.count - left.count || left.digit - right.digit)
-    .map(({ digit }) => digit);
-
-  if (contractMode === 'DIGITOVER') {
-    return { barrier: 1 };
-  }
-  if (contractMode === 'DIGITUNDER') {
-    return { barrier: 8 };
-  }
-  return { barrier: rankedDigits[rankedDigits.length - 1] };
 }
 
 /**

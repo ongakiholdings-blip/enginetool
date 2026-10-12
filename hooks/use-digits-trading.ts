@@ -15,13 +15,7 @@ import type {
 } from '@deriv/core';
 import { useBaseTrading } from '@/hooks/use-base-trading';
 import type { UseBaseTradingParams } from '@/hooks/use-base-trading';
-import {
-  computeDigitStats,
-  getDigitEntryStrategy,
-  getLastDigit,
-  getTrendEntryDigit,
-} from '../lib/digit-stats';
-import type { DigitEntryStrategy } from '../lib/digit-stats';
+import { computeDigitStats, getLastDigit } from '../lib/digit-stats';
 import { getEngineMarketSymbols } from '../lib/engine-market-scope';
 import type { EngineMarketScope } from '../lib/engine-market-scope';
 import { useTradeEngine } from './use-trade-engine';
@@ -29,35 +23,6 @@ import type { EngineDurationUnit, TradeIntervalMinutes } from './use-trade-engin
 import type { ContractMode, DigitStats, OpenPosition, ClosedPosition } from '../lib/types';
 
 const CONTRACT_TYPES = ['DIGITDIFF', 'DIGITOVER', 'DIGITUNDER'];
-
-interface EngineDigitStrategy extends DigitEntryStrategy {
-  contractMode: ContractMode;
-  symbol: string;
-  entryDigit: 5 | 6 | null;
-}
-
-interface EntrySignalWaiter {
-  symbol: string;
-  entryDigit: 5 | 6 | null;
-  afterEpoch: number;
-  resolve: () => void;
-  abort: () => void;
-  signal: AbortSignal;
-}
-
-function waitForDelayOrAbort(milliseconds: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.resolve();
-
-  return new Promise((resolve) => {
-    const finish = () => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, milliseconds);
-    signal.addEventListener('abort', finish, { once: true });
-  });
-}
 
 interface UseDigitsTradingReturn {
   isConnected: boolean;
@@ -151,16 +116,9 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   const [martingaleError, setMartingaleError] = useState<string | null>(null);
   const [engineMarketScope, setEngineMarketScopeState] =
     useState<EngineMarketScope>('selected');
-  const [engineDigitStrategy, setEngineDigitStrategy] =
-    useState<EngineDigitStrategy | null>(null);
   const engineMarketScopeRef = useRef<EngineMarketScope>('selected');
   const expectedEngineSymbolRef = useRef<string | null>(null);
   const activeSymbolRef = useRef(activeSymbol);
-  const activeContractModeRef = useRef(contractMode);
-  const currentTickRef = useRef(currentTick);
-  const pricesRef = useRef(prices);
-  const pipSizeRef = useRef(pipSize);
-  const entrySignalWaiterRef = useRef<EntrySignalWaiter | null>(null);
   const proposalRef = useRef<ProposalInfo | null>(null);
   const [hasPendingEngineTrade, setHasPendingEngineTrade] = useState(false);
   const engineStakeRef = useRef(0.73);
@@ -196,31 +154,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     [prices, pipSize]
   );
   activeSymbolRef.current = activeSymbol;
-  activeContractModeRef.current = contractMode;
-  currentTickRef.current = currentTick;
-  pricesRef.current = prices;
-  pipSizeRef.current = pipSize;
-
-  useEffect(() => {
-    const waiter = entrySignalWaiterRef.current;
-    if (
-      !waiter ||
-      !currentTick ||
-      currentTick.symbol !== waiter.symbol ||
-      currentTick.epoch <= waiter.afterEpoch
-    ) {
-      return;
-    }
-
-    const digit = getLastDigit(currentTick.quote, currentTick.pip_size ?? pipSize);
-    if (waiter.entryDigit !== null && digit !== waiter.entryDigit) return;
-    if (waiter.entryDigit === null && digit !== 5 && digit !== 6) return;
-
-    entrySignalWaiterRef.current = null;
-    waiter.signal.removeEventListener('abort', waiter.abort);
-    waiter.resolve();
-  }, [currentTick, pipSize]);
-
   const lastDigit = useMemo(() => {
     if (currentTick) {
       return getLastDigit(currentTick.quote, pipSize);
@@ -239,14 +172,13 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     clearBuyResult,
   } = useBuy(tradingWs, tradingIsConnected);
 
-  const proposalContractMode = engineDigitStrategy?.contractMode ?? contractMode;
+  const proposalContractMode = contractMode;
   const proposalBarrier =
-    engineDigitStrategy?.barrier ??
-    (contractMode === 'DIGITOVER'
+    contractMode === 'DIGITOVER'
       ? 1
       : contractMode === 'DIGITUNDER'
         ? 8
-        : selectedDigit);
+        : selectedDigit;
 
   // Null out params while a buy is in-flight — forces useProposal to unsubscribe
   // the consumed proposal ID. When isBuying flips back to false, the memo returns
@@ -275,7 +207,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     };
   }, [
     activeSymbol,
-    engineDigitStrategy,
     proposalBarrier,
     proposalContractMode,
     engineStake,
@@ -297,62 +228,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
       ? receivedProposal
       : null;
   proposalRef.current = proposal;
-
-  const prepareEngineTrade = useCallback(async (signal: AbortSignal): Promise<void> => {
-    const symbol = activeSymbolRef.current?.underlying_symbol;
-    if (!symbol) throw new Error('Select a market before starting the engine');
-
-    const mode = activeContractModeRef.current;
-    const strategy = getDigitEntryStrategy(
-      computeDigitStats(pricesRef.current, pipSizeRef.current).counts,
-      mode
-    );
-    const entryDigit =
-      mode === 'DIGITOVER' || mode === 'DIGITUNDER'
-        ? getTrendEntryDigit(pricesRef.current, pipSizeRef.current)
-        : null;
-    const intervalStrategy = { ...strategy, contractMode: mode, symbol, entryDigit };
-    setEngineDigitStrategy(intervalStrategy);
-
-    if (mode === 'DIGITOVER' || mode === 'DIGITUNDER') {
-      const baselineTick = currentTickRef.current;
-      const afterEpoch = baselineTick?.symbol === symbol ? baselineTick.epoch : 0;
-      await new Promise<void>((resolve) => {
-        const waiter: EntrySignalWaiter = {
-          symbol,
-          entryDigit,
-          afterEpoch,
-          resolve,
-          signal,
-          abort: () => {
-            if (entrySignalWaiterRef.current === waiter) {
-              entrySignalWaiterRef.current = null;
-            }
-            signal.removeEventListener('abort', waiter.abort);
-            resolve();
-          },
-        };
-        entrySignalWaiterRef.current = waiter;
-        signal.addEventListener('abort', waiter.abort, { once: true });
-        if (signal.aborted) waiter.abort();
-      });
-      if (signal.aborted) return;
-    }
-
-    while (!signal.aborted) {
-      const candidate = proposalRef.current;
-      if (
-        candidate?.symbol === symbol &&
-        candidate.contractType === mode &&
-        candidate.barrier === strategy.barrier &&
-        candidate.amount === engineStakeRef.current
-      ) {
-        return;
-      }
-      await waitForDelayOrAbort(250, signal);
-    }
-
-  }, []);
 
   const buyContract = useCallback(async () => {
     if (!proposal) throw new Error('The trade proposal is no longer available');
@@ -406,12 +281,11 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     return (
       currentSymbol !== undefined &&
       proposalSymbol === currentSymbol &&
-      engineDigitStrategy?.symbol === currentSymbol &&
-      proposalRef.current?.contractType === engineDigitStrategy?.contractMode &&
-      proposalRef.current?.barrier === engineDigitStrategy?.barrier &&
+      proposalRef.current?.contractType === contractMode &&
+      proposalRef.current?.barrier === proposalBarrier &&
       (engineMarketScopeRef.current === 'selected' || expectedSymbol === currentSymbol)
     );
-  }, [engineDigitStrategy]);
+  }, [contractMode, proposalBarrier]);
 
   const shouldWaitForMartingaleSettlement =
     martingaleMultiplier.trim() !== '' && Number(martingaleMultiplier) > 1;
@@ -424,14 +298,9 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
       !isBuying &&
       (!shouldWaitForMartingaleSettlement || !hasPendingEngineTrade),
     isTradeReady: isEngineProposalReady,
-    prepareTrade: prepareEngineTrade,
     placeTrade: buyContract,
     onTradeComplete: selectNextEngineMarket,
   });
-
-  useEffect(() => {
-    if (!engine.isEngineRunning) setEngineDigitStrategy(null);
-  }, [engine.isEngineRunning]);
 
   useEffect(() => {
     if (
@@ -492,7 +361,6 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     engineRunningRef.current = engine.isEngineRunning;
     if (engine.isEngineRunning) return;
 
-    setEngineDigitStrategy(null);
     pendingEngineContractsRef.current.clear();
     earlyClosedContractsRef.current.clear();
     processedEngineContractsRef.current.clear();
@@ -550,7 +418,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
   }, [buyResult, processEngineTradeOutcome]);
 
   const startEngine = useCallback(() => {
-    if (!engineMarketReady || digitStats.totalTicks === 0) return;
+    if (!engineMarketReady) return;
     const multiplier = martingaleMultiplier.trim()
       ? Number(martingaleMultiplier)
       : 1;
@@ -569,18 +437,15 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     processedEngineContractsRef.current.clear();
     setHasPendingEngineTrade(false);
     updateEngineStake(baseStake);
-    setEngineDigitStrategy(null);
     engine.startEngine();
   }, [
     engine.startEngine,
     engineMarketReady,
-    digitStats.totalTicks,
     martingaleMultiplier,
     updateEngineStake,
   ]);
 
   const stopEngine = useCallback(() => {
-    setEngineDigitStrategy(null);
     engine.stopEngine();
   }, [engine.stopEngine]);
 
@@ -653,7 +518,7 @@ export function useDigitsTrading({ ws, isConnected, isExhausted, isAuthenticated
     engineError: engine.engineError,
     engineMarketScope,
     setEngineMarketScope,
-    canEngineMarketTrade: engineMarketReady && digitStats.totalTicks > 0,
+    canEngineMarketTrade: engineMarketReady,
     startEngine,
     stopEngine,
     buyResult,

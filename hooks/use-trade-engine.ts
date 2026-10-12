@@ -55,7 +55,6 @@ export type EngineDurationUnit = 'minutes' | 'hours' | 'days';
 interface UseTradeEngineParams {
   canTrade: boolean;
   isTradeReady?: () => boolean;
-  prepareTrade?: (signal: AbortSignal) => Promise<void>;
   placeTrade: () => Promise<void>;
   onTradeComplete?: () => void;
 }
@@ -78,7 +77,6 @@ interface UseTradeEngineReturn {
 export function useTradeEngine({
   canTrade,
   isTradeReady,
-  prepareTrade,
   placeTrade,
   onTradeComplete,
 }: UseTradeEngineParams): UseTradeEngineReturn {
@@ -95,7 +93,6 @@ export function useTradeEngine({
   const intervalRef = useRef<TradeIntervalMinutes>(1);
   const canTradeRef = useRef(canTrade);
   const isTradeReadyRef = useRef(isTradeReady);
-  const prepareTradeRef = useRef(prepareTrade);
   const placeTradeRef = useRef(placeTrade);
   const onTradeCompleteRef = useRef(onTradeComplete);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,7 +107,6 @@ export function useTradeEngine({
 
   canTradeRef.current = canTrade;
   isTradeReadyRef.current = isTradeReady;
-  prepareTradeRef.current = prepareTrade;
   placeTradeRef.current = placeTrade;
   onTradeCompleteRef.current = onTradeComplete;
 
@@ -208,7 +204,6 @@ export function useTradeEngine({
     const controller = new AbortController();
     cycleAbortRef.current = controller;
     try {
-      await prepareTradeRef.current?.(controller.signal);
       while (
         runningRef.current &&
         !controller.signal.aborted &&

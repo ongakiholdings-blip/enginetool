@@ -154,7 +154,7 @@ export function TradeEngineSettings({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          <Localize i18n_default_text="For Over/Under, the engine waits for digit 6 in a rising trend, 5 in a falling trend, or either digit if trend is flat. Different tones signal interval start and end." />
+          <Localize i18n_default_text="Starts with a trade as soon as the proposal is ready, then trades again at each selected interval. Different tones signal interval start and end." />
         </p>
       </div>
       <div className="space-y-2">
