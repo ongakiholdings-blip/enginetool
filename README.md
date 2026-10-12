@@ -10,7 +10,7 @@ A self-hosted digit trading app built on the Deriv WebSocket API. Supports Match
 
 1. Log in to your Deriv account and go to the [API Token page](https://app.deriv.com/account/api-token) to create a token with the required scopes.
 2. Navigate to [App Registration](https://developers.deriv.com/dashboard/) and register a new application.
-3. Set the **Redirect URI** to the URL where you will host this app (e.g. `http://localhost:3000` for local development).
+3. Set the **Redirect URI** to `https://frostydbot.site` for production. Register `http://localhost:3000` separately if you also want to test OAuth locally.
 4. Copy the **App ID** shown after registration — you will need it in the next step.
 
 ## Step 2: Configure environment variables
@@ -24,11 +24,11 @@ cp .env.example .env.production
 Edit `.env.production`:
 
 ```env
-NEXT_PUBLIC_DERIV_APP_ID=your_app_id_here
-NEXT_PUBLIC_DERIV_REDIRECT_URI=https://your-registered-redirect-uri.com
-NEXT_PUBLIC_DERIV_APP_NAME=your_app_name_here
+NEXT_PUBLIC_DERIV_APP_ID=34EC8wFqtCnCN09NJpMXv
+NEXT_PUBLIC_DERIV_REDIRECT_URI=https://frostydbot.site
+NEXT_PUBLIC_DERIV_APP_NAME=FROSTY-DBOT
 NEXT_PUBLIC_DERIV_SHOW_APP_NAME=true
-NEXT_PUBLIC_DERIV_REFERRAL_LINK=your_referral_link_here
+NEXT_PUBLIC_DERIV_REFERRAL_LINK=
 NEXT_PUBLIC_DERIV_OAUTH_SCOPES=trade,account_manage
 NEXT_PUBLIC_DERIV_ENV=production
 ```
@@ -43,13 +43,15 @@ NEXT_PUBLIC_DERIV_ENV=production
 | `NEXT_PUBLIC_DERIV_OAUTH_SCOPES` | Comma-separated OAuth scopes (e.g. `trade,account_manage`) |
 | `NEXT_PUBLIC_DERIV_ENV` | `production` to connect to the live Deriv endpoint; `preview` for staging |
 
+For the Vercel **Production** environment, use the values shown above. Leave the optional referral link blank if you do not have one. Add the same `https://frostydbot.site` redirect URI to the Deriv application's allowed redirect URIs.
+
 For local development, copy `.env.example` to `.env.local` and fill in your values. Next.js loads `.env.local` automatically.
 
 ### Deploy to Vercel
 
 1. Import this repository into Vercel. The included `vercel.json` identifies it as a Next.js project; keep the detected Next.js framework settings and do not set an output directory such as `out`.
 2. In the Vercel project, open **Settings → Environment Variables** and add the variables from `.env.example`. Set them for the environments where you intend to deploy. These are `NEXT_PUBLIC_` variables and are included in the browser bundle; never put Deriv API tokens or other secrets in them.
-3. Set `NEXT_PUBLIC_DERIV_REDIRECT_URI` to the exact production URL registered for your Deriv application (for example, `https://your-project.vercel.app`). Register that same URL in the Deriv App settings. If you use a custom domain, use that domain consistently in both places.
+3. Set `NEXT_PUBLIC_DERIV_REDIRECT_URI` to `https://frostydbot.site` and register that exact URL in the Deriv App settings. Configure `frostydbot.site` as the Vercel custom domain and enable HTTPS.
 4. Redeploy after changing environment variables; Next.js reads these public values during the build.
 
 Use `NEXT_PUBLIC_DERIV_ENV=production` for live Deriv services. Use `preview` only when intentionally connecting a deployment to Deriv's staging services.
