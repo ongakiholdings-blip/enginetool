@@ -40,8 +40,10 @@ interface PositionsTableProps {
   initialFilter?: PositionFilter;
   /** Hide the position filter and show every position. */
   showFilter?: boolean;
-  /** Clears locally hidden closed history without affecting active positions. */
+  /** Clears the locally displayed session history. */
   onResetClosedHistory?: () => void;
+  /** Overrides the reset button's empty-history state. */
+  resetDisabled?: boolean;
 }
 
 function getValueColHeader(
@@ -91,6 +93,7 @@ export function PositionsTable({
   initialFilter = 'open',
   showFilter = true,
   onResetClosedHistory,
+  resetDisabled,
 }: PositionsTableProps) {
   const { localize } = useAppTranslations();
   const [filter, setFilter] = useState<PositionFilter>(initialFilter);
@@ -119,7 +122,7 @@ export function PositionsTable({
             variant="outline"
             size="sm"
             className="justify-self-start"
-            disabled={closedPositions.length === 0}
+            disabled={resetDisabled ?? totalCount === 0}
             onClick={onResetClosedHistory}
           >
             <Localize i18n_default_text="Reset history" />
@@ -153,7 +156,7 @@ export function PositionsTable({
       </div>
       {onResetClosedHistory && (
         <p className="mb-3 text-xs text-muted-foreground">
-          <Localize i18n_default_text="Reset history only clears closed positions from this list. Active positions are kept." />
+          <Localize i18n_default_text="Reset history clears this session's displayed transactions; active contracts continue trading." />
         </p>
       )}
 
@@ -257,11 +260,17 @@ function OpenPositionRow({
     ? providedProfitPct
     : getProfitPercentage(profit, buyPrice);
   const isProfit = profit >= 0;
+  const isClosed = !!pos.is_sold || !!pos.is_expired || pos.status !== 'open';
 
   return (
     <TableRow>
       <TableCell className="font-medium">
         {formatContractType(pos.contract_type, contractTypeLabels, pos.barrier)}
+        {isClosed && (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            <Localize i18n_default_text="Closed" />
+          </span>
+        )}
       </TableCell>
       <TableCell className="text-muted-foreground">{getSymbolDisplayName(pos.underlying_symbol)}</TableCell>
       <TableCell className="text-right">
@@ -272,14 +281,20 @@ function OpenPositionRow({
       </TableCell>
       <ProfitCell profit={profit} profitPct={profitPct} currency={pos.currency} isProfit={isProfit} />
       <TableCell className="text-right">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={isSelling || pos.is_valid_to_sell !== 1}
-          onClick={() => onSell(pos.contract_id, pos.bid_price)}
-        >
-          {isSelling ? localize('Selling...') : localize('Sell')}
-        </Button>
+        {isClosed ? (
+          <span className="text-xs text-muted-foreground">
+            <Localize i18n_default_text="Closed" />
+          </span>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isSelling || pos.is_valid_to_sell !== 1}
+            onClick={() => onSell(pos.contract_id, pos.bid_price)}
+          >
+            {isSelling ? localize('Selling...') : localize('Sell')}
+          </Button>
+        )}
       </TableCell>
     </TableRow>
   );

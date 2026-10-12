@@ -70,6 +70,7 @@ export function OpenPositionCard({
   const buyPrice = parseFloat(pos.buy_price);
   const payout = parseFloat(pos.payout);
   const { elapsed, progress } = usePositionTimer(pos);
+  const isClosed = !!pos.is_sold || !!pos.is_expired || pos.status !== 'open';
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 space-y-3">
@@ -85,19 +86,26 @@ export function OpenPositionCard({
         </div>
         <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <span>{dirLabel}</span>
+          {isClosed && (
+            <Badge variant="secondary" className="text-xs">
+              <Localize i18n_default_text="Closed" />
+            </Badge>
+          )}
         </div>
       </div>
 
       {/* Row 2: Timer + Progress bar */}
-      <div className="space-y-1.5">
-        <span className="text-sm font-mono text-foreground">{formatDuration(elapsed)}</span>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div
-            className="h-full rounded-full bg-emerald-400 transition-all duration-1000"
-            style={{ width: `${progress}%` }}
-          />
+      {!isClosed && (
+        <div className="space-y-1.5">
+          <span className="text-sm font-mono text-foreground">{formatDuration(elapsed)}</span>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-400 transition-all duration-1000"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Row 3: Currency badge */}
       <div>
@@ -154,14 +162,16 @@ export function OpenPositionCard({
       </div>
 
       {/* Sell button */}
-      <Button
-        variant="outline"
-        className="w-full rounded-full"
-        disabled={isSelling || pos.is_valid_to_sell !== 1}
-        onClick={() => onSell(pos.contract_id, pos.bid_price)}
-      >
-        {isSelling ? localize('Selling...') : localize('Sell')}
-      </Button>
+      {!isClosed && (
+        <Button
+          variant="outline"
+          className="w-full rounded-full"
+          disabled={isSelling || pos.is_valid_to_sell !== 1}
+          onClick={() => onSell(pos.contract_id, pos.bid_price)}
+        >
+          {isSelling ? localize('Selling...') : localize('Sell')}
+        </Button>
+      )}
     </div>
   );
 }

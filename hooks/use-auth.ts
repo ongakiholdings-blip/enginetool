@@ -145,21 +145,9 @@ export interface UseAuthReturn {
 
 export function useAuth(): UseAuthReturn {
   const { currentLang } = useAppTranslations();
-  const [authState, setAuthState] = useState<AuthState>(() =>
-    typeof window !== 'undefined' && getDerivApiToken()
-      ? 'authenticating'
-      : typeof window !== 'undefined' && getAuthInfo()
-        ? 'authenticated'
-        : 'unauthenticated'
-  );
-  const [accounts, setAccounts] = useState<DerivAccount[]>(() => {
-    if (typeof window === 'undefined') return [];
-    return getDerivAccounts() ?? [];
-  });
-  const [activeAccountId, setActiveAccountId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return getActiveLoginId() ?? null;
-  });
+  const [authState, setAuthState] = useState<AuthState>('unauthenticated');
+  const [accounts, setAccounts] = useState<DerivAccount[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
   const [wsUrl, setWsUrl] = useState<string | undefined>(undefined);
   const [apiToken, setApiToken] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +221,9 @@ export function useAuth(): UseAuthReturn {
     const init = async () => {
       const storedApiToken = getDerivApiToken();
       if (storedApiToken) {
+        setAuthState('authenticating');
+        setAccounts(getDerivAccounts() ?? []);
+        setActiveAccountId(getActiveLoginId() ?? null);
         try {
           const session = await authorizeApiToken(
             storedApiToken,
@@ -277,6 +268,9 @@ export function useAuth(): UseAuthReturn {
       // Check for existing session
       const storedAuth = getAuthInfo();
       if (storedAuth) {
+        setAuthState('authenticating');
+        setAccounts(getDerivAccounts() ?? []);
+        setActiveAccountId(getActiveLoginId() ?? null);
         // Check if token is expired
         if (storedAuth.expires_at && Date.now() / 1000 > storedAuth.expires_at) {
           let refreshed: AuthInfo;

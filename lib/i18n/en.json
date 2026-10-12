@@ -118,5 +118,5 @@
   "730873872": "Engine stopped after an error",
   "48544129": "Transaction history",
   "1756527580": "Reset history",
-  "-33523460": "Reset history only clears closed positions from this list. Active positions are kept."
+  "437732420": "Reset history clears this session's displayed transactions; active contracts continue trading."
 }

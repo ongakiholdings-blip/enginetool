@@ -25,8 +25,8 @@ interface TradeControlsProps {
   isConnected: boolean;
   stake: string;
   onStakeChange: (value: string) => void;
-  duration: number;
-  onDurationChange: (value: number) => void;
+  duration: string;
+  onDurationChange: (value: string) => void;
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
@@ -178,10 +178,7 @@ export function TradeControls({
             id="duration"
             type="number"
             value={duration}
-            onChange={e => {
-              const val = parseInt(e.target.value, 10);
-              if (!isNaN(val)) onDurationChange(val);
-            }}
+            onChange={e => onDurationChange(e.target.value)}
             min={durationLimits.min}
             max={durationLimits.max}
             step={1}

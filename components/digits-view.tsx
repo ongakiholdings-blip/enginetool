@@ -89,8 +89,8 @@ export interface DigitsViewProps {
   setSelectedDigit: (digit: number) => void;
   stake: string;
   setStake: (value: string) => void;
-  duration: number;
-  setDuration: (value: number) => void;
+  duration: string;
+  setDuration: (value: string) => void;
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
@@ -219,30 +219,110 @@ export function DigitsView({
   const { localize } = useAppTranslations();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showTransactions, setShowTransactions] = useState(false);
-  const [clearedClosedPositionIds, setClearedClosedPositionIds] = useState<Set<number>>(
-    () => new Set()
-  );
+  const [tradeSession, setTradeSession] = useState<{
+    startedAt: number | null;
+    historySince: number | null;
+  }>({ startedAt: null, historySince: null });
+  const [sessionClosedLedger, setSessionClosedLedger] = useState<ClosedPosition[]>([]);
+  const [sessionClosedSnapshots, setSessionClosedSnapshots] = useState<OpenPosition[]>([]);
   const handleViewPositions = useCallback(() => setShowTransactions(true), []);
   const accountId = activeAccount?.account_id;
-  const visibleClosedPositions = useMemo(
+  const historyStartedAtSeconds =
+    tradeSession.historySince === null
+      ? null
+      : Math.floor(tradeSession.historySince / 1000);
+  const sessionOpenPositions = useMemo(
     () =>
-      closedPositions.filter(
-        (position) => !clearedClosedPositionIds.has(position.contract_id)
-      ),
-    [closedPositions, clearedClosedPositionIds]
+      historyStartedAtSeconds === null
+        ? []
+        : openPositions.filter(
+            (position) => position.date_start >= historyStartedAtSeconds
+          ),
+    [openPositions, historyStartedAtSeconds]
   );
-  const resetClosedHistory = useCallback(() => {
-    setClearedClosedPositionIds((cleared) => {
-      const next = new Set(cleared);
-      for (const position of closedPositions) {
-        next.add(position.contract_id);
+  useEffect(() => {
+    if (historyStartedAtSeconds === null) return;
+    const closedUpdates = openPositions.filter(
+      (position) =>
+        position.date_start >= historyStartedAtSeconds &&
+        (!!position.is_sold || !!position.is_expired || position.status !== 'open')
+    );
+    if (closedUpdates.length === 0) return;
+
+    setSessionClosedSnapshots((current) => {
+      const positions = new Map(
+        current.map((position) => [position.contract_id, position])
+      );
+      for (const position of closedUpdates) {
+        positions.set(position.contract_id, position);
       }
-      return next;
+      return Array.from(positions.values());
     });
-  }, [closedPositions]);
+  }, [openPositions, historyStartedAtSeconds]);
+  const newlyClosedSessionPositions = useMemo(
+    () =>
+      historyStartedAtSeconds === null
+        ? []
+        : closedPositions.filter(
+            (position) => position.purchase_time >= historyStartedAtSeconds
+          ),
+    [closedPositions, historyStartedAtSeconds]
+  );
+  useEffect(() => {
+    if (newlyClosedSessionPositions.length === 0) return;
+    setSessionClosedLedger((current) => {
+      const positions = new Map(
+        current.map((position) => [position.contract_id, position])
+      );
+      for (const position of newlyClosedSessionPositions) {
+        positions.set(position.contract_id, position);
+      }
+      return Array.from(positions.values()).sort(
+        (left, right) => right.sell_time - left.sell_time
+      );
+    });
+  }, [newlyClosedSessionPositions]);
+  const displayedOpenPositions = useMemo(() => {
+    const closedIds = new Set(
+      sessionClosedLedger.map((position) => position.contract_id)
+    );
+    const positions = new Map<number, OpenPosition>();
+    for (const position of [...sessionOpenPositions, ...sessionClosedSnapshots]) {
+      if (!closedIds.has(position.contract_id)) {
+        positions.set(position.contract_id, position);
+      }
+    }
+    return Array.from(positions.values()).sort(
+      (left, right) => right.date_start - left.date_start
+    );
+  }, [sessionOpenPositions, sessionClosedSnapshots, sessionClosedLedger]);
+  const sessionProfitLoss = useMemo(() => {
+    const openProfit = displayedOpenPositions.reduce((total, position) => {
+      const profit = Number(position.profit);
+      return total + (Number.isFinite(profit) ? profit : 0);
+    }, 0);
+    const closedProfit = sessionClosedLedger.reduce((total, position) => {
+      const profit = Number(position.sell_price) - Number(position.buy_price);
+      return total + (Number.isFinite(profit) ? profit : 0);
+    }, 0);
+    return openProfit + closedProfit;
+  }, [displayedOpenPositions, sessionClosedLedger]);
+  const transactionCurrency =
+    activeAccount?.currency ?? displayedOpenPositions[0]?.currency ?? '';
+  const resetClosedHistory = useCallback(() => {
+    setSessionClosedLedger([]);
+    setSessionClosedSnapshots([]);
+    setTradeSession((session) =>
+      session.startedAt === null
+        ? session
+        : { ...session, historySince: Date.now() }
+    );
+  }, []);
 
   useEffect(() => {
-    setClearedClosedPositionIds(new Set());
+    setSessionClosedLedger([]);
+    setSessionClosedSnapshots([]);
+    setTradeSession({ startedAt: null, historySince: null });
   }, [accountId]);
 
   // Starting the engine requires an authenticated account. Once started, each
@@ -260,6 +340,11 @@ export function DigitsView({
       setShowLoginPrompt(true);
       return;
     }
+    setTradeSession((session) => {
+      if (session.startedAt !== null) return session;
+      const startedAt = Date.now();
+      return { startedAt, historySince: startedAt };
+    });
     startEngine();
   }, [editMode, isEngineRunning, authState, startEngine, stopEngine]);
 
@@ -391,25 +476,53 @@ export function DigitsView({
   const renderTransactionHistory = () =>
     !editMode ? (
       <section className="w-full max-w-7xl mx-auto px-3 py-4 pb-24 sm:px-4">
-        <PositionsTable
-          openPositions={openPositions}
-          closedPositions={visibleClosedPositions}
-          onSell={sellContract}
-          sellingId={sellingId}
-          sellError={sellError}
-          onClearSellError={clearSellError}
-          contractTypeLabels={{
-            DIGITMATCH: localize('Digit Match'),
-            DIGITDIFF: localize('Digit Differs'),
-            DIGITOVER: localize('Digit Over'),
-            DIGITUNDER: localize('Digit Under'),
-          }}
-          title="Transaction history"
-          initialFilter="all"
-          showFilter={false}
-          onResetClosedHistory={resetClosedHistory}
-          className="mt-0"
-        />
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+          <PositionsTable
+            openPositions={displayedOpenPositions}
+            closedPositions={sessionClosedLedger}
+            onSell={sellContract}
+            sellingId={sellingId}
+            sellError={sellError}
+            onClearSellError={clearSellError}
+            contractTypeLabels={{
+              DIGITMATCH: localize('Digit Match'),
+              DIGITDIFF: localize('Digit Differs'),
+              DIGITOVER: localize('Digit Over'),
+              DIGITUNDER: localize('Digit Under'),
+            }}
+            title="Transaction history"
+            initialFilter="all"
+            showFilter={false}
+            onResetClosedHistory={resetClosedHistory}
+            resetDisabled={
+              displayedOpenPositions.length + sessionClosedLedger.length === 0
+            }
+            className="order-last mt-0 xl:order-first"
+          />
+          <Card className="order-first xl:order-last">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">
+                <Localize i18n_default_text="Total profit/loss:" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p
+                className={`text-2xl font-bold tabular-nums ${
+                  sessionProfitLoss > 0
+                    ? 'text-emerald-500'
+                    : sessionProfitLoss < 0
+                      ? 'text-destructive'
+                      : 'text-foreground'
+                }`}
+                aria-live="polite"
+              >
+                {sessionProfitLoss > 0 ? '+' : ''}
+                {sessionProfitLoss.toFixed(2)}
+                {transactionCurrency ? ` ${transactionCurrency}` : ''}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </section>
     ) : null;
 

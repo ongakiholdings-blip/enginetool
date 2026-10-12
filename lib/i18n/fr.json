@@ -118,5 +118,5 @@
   "730873872": "Le moteur s'est arrêté après une erreur",
   "48544129": "Historique des transactions",
   "1756527580": "Réinitialiser l'historique",
-  "-33523460": "La réinitialisation masque uniquement les positions clôturées de cette liste. Les positions actives sont conservées."
+  "437732420": "Réinitialiser l'historique efface les transactions affichées de cette session ; les contrats actifs continuent."
 }

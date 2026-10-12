@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { FocusScope } from '@radix-ui/react-focus-scope';
 import { KeyRound, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
-import { useTheme } from 'next-themes';
+import { useTheme } from '@/components/custom/providers';
 import { Localize } from '@deriv-com/translations';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';

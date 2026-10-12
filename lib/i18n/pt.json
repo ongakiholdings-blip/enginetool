@@ -118,5 +118,5 @@
   "730873872": "O motor parou devido a um erro",
   "48544129": "Histórico de transações",
   "1756527580": "Redefinir histórico",
-  "-33523460": "Redefinir o histórico apenas remove as posições fechadas desta lista. As posições ativas são mantidas."
+  "437732420": "Redefinir o histórico limpa as transações exibidas desta sessão; os contratos ativos continuam."
 }

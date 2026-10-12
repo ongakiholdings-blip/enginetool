@@ -118,5 +118,5 @@
   "730873872": "El motor se detuvo por un error",
   "48544129": "Historial de transacciones",
   "1756527580": "Restablecer historial",
-  "-33523460": "Restablecer el historial solo quita de esta lista las posiciones cerradas. Las posiciones activas se conservan."
+  "437732420": "Restablecer el historial borra las transacciones mostradas de esta sesión; los contratos activos siguen operando."
 }

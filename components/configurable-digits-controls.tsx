@@ -225,8 +225,8 @@ export interface ConfigurableDigitsControlsProps {
   onDigitSelect: (digit: number) => void;
   stake: string;
   onStakeChange: (value: string) => void;
-  duration: number;
-  onDurationChange: (value: number) => void;
+  duration: string;
+  onDurationChange: (value: string) => void;
   durationLimits: DurationLimits;
   proposal: ProposalInfo | null;
   isProposalLoading: boolean;
@@ -604,145 +604,48 @@ export function ConfigurableDigitsControls(props: ConfigurableDigitsControlsProp
     return (variants[config.styles.contractMode] ?? variants.a)();
   };
 
-  // ── Stake (3 styles) ────────────────────────────────────────────────────
-  // Real control = USD <Input>.
+  // ── Stake ───────────────────────────────────────────────────────────────
   const renderStake = () => {
-    const current = parseFloat(stake) || 0;
-    const setStakeNum = (amount: number) => onStakeChange(String(Math.max(0, amount)));
-    const stakeInput = (extraClass?: string) => (
-      <Input
-        id="stake"
-        type="number"
-        value={stake}
-        onChange={(event) => onStakeChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (['e', 'E', '+', '-'].includes(event.key)) event.preventDefault();
-        }}
-        min={0}
-        step="0.01"
-        labelRight="USD"
-        className={extraClass}
-      />
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor="stake" className="text-xs text-muted-foreground">
+          <Localize i18n_default_text="Stake" />
+        </Label>
+        <Input
+          id="stake"
+          type="number"
+          value={stake}
+          onChange={(event) => onStakeChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (['e', 'E', '+', '-'].includes(event.key)) event.preventDefault();
+          }}
+          min={0}
+          step="0.01"
+          labelRight="USD"
+        />
+      </div>
     );
-
-    const variants: Record<StyleVariant, () => React.ReactNode> = {
-      // a — plain <Input> (current)
-      a: () => (
-        <div className="space-y-1.5">
-          <Label htmlFor="stake" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Stake" />
-          </Label>
-          {stakeInput()}
-        </div>
-      ),
-      // <Input> flanked by −/+ <Button> steppers.
-      b: () => (
-        <div className="space-y-1.5">
-          <Label htmlFor="stake" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Stake" />
-          </Label>
-          <div className="flex w-full items-center gap-2">
-            <Button variant="outline" size="icon" className="shrink-0" onClick={() => setStakeNum(current - 1)}>−</Button>
-            <div className="flex-1">{stakeInput('text-center')}</div>
-            <Button variant="outline" size="icon" className="shrink-0" onClick={() => setStakeNum(current + 1)}>+</Button>
-          </div>
-        </div>
-      ),
-      // Preset chip <Button>s + <Input>.
-      c: () => (
-        <div className="space-y-1.5">
-          <Label htmlFor="stake" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Stake" />
-          </Label>
-          <div className="flex gap-2">
-            {['5', '10', '25', '50'].map((preset) => (
-              <Button
-                key={preset}
-                variant={stake === preset ? 'default' : 'outline'}
-                size="sm"
-                className={cn('flex-1', stake === preset && 'bg-primary text-primary-foreground')}
-                onClick={() => onStakeChange(preset)}
-              >
-                {preset}
-              </Button>
-            ))}
-          </div>
-          {stakeInput()}
-        </div>
-      ),
-    };
-    return (variants[config.styles.stake] ?? variants.a)();
   };
 
-  // ── Duration (3 styles) ─────────────────────────────────────────────────
-  // Real control = ticks <Input>.
+  // ── Duration ───────────────────────────────────────────────────────────
   const renderDuration = () => {
-    const clamp = (amount: number) => Math.min(durationLimits.max, Math.max(durationLimits.min, amount));
-    const setDurationNum = (amount: number) => onDurationChange(clamp(amount));
-    const durationInput = (extraClass?: string) => (
-      <Input
-        id="duration"
-        type="number"
-        value={duration}
-        onChange={(event) => {
-          const val = parseInt(event.target.value, 10);
-          if (!isNaN(val)) onDurationChange(val);
-        }}
-        min={durationLimits.min}
-        max={durationLimits.max}
-        step={1}
-        labelRight={localize('Ticks')}
-        className={extraClass}
-      />
+    return (
+      <div className="space-y-1.5">
+        <Label htmlFor="duration" className="text-xs text-muted-foreground">
+          <Localize i18n_default_text="Duration" />
+        </Label>
+        <Input
+          id="duration"
+          type="number"
+          value={duration}
+          onChange={(event) => onDurationChange(event.target.value)}
+          min={durationLimits.min}
+          max={durationLimits.max}
+          step={1}
+          labelRight={localize('Ticks')}
+        />
+      </div>
     );
-
-    const variants: Record<StyleVariant, () => React.ReactNode> = {
-      // a — plain <Input> (current)
-      a: () => (
-        <div className="space-y-1.5">
-          <Label htmlFor="duration" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Duration" />
-          </Label>
-          {durationInput()}
-        </div>
-      ),
-      // <Input> flanked by −/+ <Button> steppers.
-      b: () => (
-        <div className="space-y-1.5">
-          <Label htmlFor="duration" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Duration" />
-          </Label>
-          <div className="flex w-full items-center gap-2">
-            <Button variant="outline" size="icon" className="shrink-0" onClick={() => setDurationNum(duration - 1)}>−</Button>
-            <div className="flex-1">{durationInput('text-center')}</div>
-            <Button variant="outline" size="icon" className="shrink-0" onClick={() => setDurationNum(duration + 1)}>+</Button>
-          </div>
-        </div>
-      ),
-      // Preset chip <Button>s (1/5/10) + <Input>.
-      c: () => (
-        <div className="space-y-1.5">
-          <Label htmlFor="duration" className="text-xs text-muted-foreground">
-            <Localize i18n_default_text="Duration" />
-          </Label>
-          <div className="flex gap-2">
-            {[1, 5, 10].map((preset) => (
-              <Button
-                key={preset}
-                variant={duration === preset ? 'default' : 'outline'}
-                size="sm"
-                className={cn('flex-1', duration === preset && 'bg-primary text-primary-foreground')}
-                onClick={() => setDurationNum(preset)}
-              >
-                {preset}
-              </Button>
-            ))}
-          </div>
-          {durationInput()}
-        </div>
-      ),
-    };
-    return (variants[config.styles.duration] ?? variants.a)();
   };
 
   // ── Prediction + payout (3 styles) ──────────────────────────────────────
